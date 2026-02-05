@@ -1,0 +1,29 @@
+{
+  "name": "kan-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for Kan task management - chase people about overdue tasks",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.42.0",
+    "grammy": "^1.21.1",
+    "nanoid": "^5.0.7",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
