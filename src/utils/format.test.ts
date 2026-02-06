@@ -79,7 +79,7 @@ describe("formatCardList", () => {
     ];
     const result = formatCardList(cards);
     expect(result).toContain("1.");
-    expect(result).toContain("[Test Task](https://tasks.xdeca.com/boards/5vv5t6f11f5h)");
+    expect(result).toContain("[Test Task](https://tasks.xdeca.com/cards/abc123)");
     expect(result).toContain("Board 1");
     expect(result).toContain("To Do");
   });

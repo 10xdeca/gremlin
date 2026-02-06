@@ -50,7 +50,7 @@ export function formatCard(
   }
 
   if (options.includeLink && options.workspaceSlug) {
-    const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+    const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
     text += `[View in Kan](${url})\n`;
   }
 
@@ -72,7 +72,7 @@ export function formatCardList(
       const dueInfo = item.card.dueDate
         ? ` - ${formatDueDate(item.card.dueDate)}`
         : "";
-      const title = `[${escapeMarkdown(item.card.title)}](${KAN_BASE_URL}/boards/${item.board.publicId})`;
+      const title = `[${escapeMarkdown(item.card.title)}](${KAN_BASE_URL}/cards/${item.card.publicId})`;
       return `${index + 1}. ${title}${dueInfo}\n   ${escapeMarkdown(item.board.name)} › ${escapeMarkdown(item.list.name)}`;
     })
     .join("\n\n");
@@ -104,7 +104,7 @@ export function formatOverdueReminder(
     text += `${mentions} `;
   }
 
-  const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
   text += `[View task](${url})`;
 
   return text;
@@ -129,7 +129,7 @@ export function formatNoDueDateReminder(
     text += `When should this be done\\?\n\n`;
   }
 
-  const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
   text += `[View task](${url})`;
 
   return text;
@@ -161,7 +161,7 @@ export function formatVagueTaskReminder(
     text += `This task needs more detail\\.\n\n`;
   }
 
-  const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
   text += `[View task](${url})`;
 
   return text;
@@ -188,7 +188,7 @@ export function formatStaleTaskReminder(
     text += `This task may be blocked\\.\n\n`;
   }
 
-  const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
   text += `[View task](${url})`;
 
   return text;
@@ -211,7 +211,7 @@ export function formatUnassignedReminder(
     text += `Who's working on this\\?\n\n`;
   }
 
-  const url = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
   text += `[View task](${url})`;
 
   return text;
