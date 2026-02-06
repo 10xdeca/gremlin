@@ -73,7 +73,8 @@ export function formatCardList(
         ? ` - ${formatDueDate(item.card.dueDate)}`
         : "";
       const title = `[${escapeMarkdown(item.card.title)}](${KAN_BASE_URL}/cards/${item.card.publicId})`;
-      return `${index + 1}. ${title}${dueInfo}\n   ${escapeMarkdown(item.board.name)} › ${escapeMarkdown(item.list.name)}`;
+      const boardLink = `[${escapeMarkdown(item.board.name)}](${KAN_BASE_URL}/boards/${item.board.publicId})`;
+      return `${index + 1}. ${title}${dueInfo}\n   ${boardLink} › ${escapeMarkdown(item.list.name)}`;
     })
     .join("\n\n");
 }
