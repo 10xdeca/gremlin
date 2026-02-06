@@ -2,6 +2,25 @@ import type { Context, NextFunction } from "grammy";
 import { getWorkspaceLink } from "../../db/queries.js";
 import { getServiceClient, type KanApiClient } from "../../api/kan-client.js";
 
+// Parse admin user IDs from environment variable
+const ADMIN_USER_IDS: Set<number> = new Set(
+  (process.env.ADMIN_USER_IDS || "")
+    .split(",")
+    .map((id) => parseInt(id.trim(), 10))
+    .filter((id) => !isNaN(id))
+);
+
+// Check if a user is an admin
+export function isAdmin(userId: number | undefined): boolean {
+  if (!userId) return false;
+  return ADMIN_USER_IDS.has(userId);
+}
+
+// Reply with access denied message
+export async function replyNotAdmin(ctx: Context): Promise<void> {
+  await ctx.reply("You don't have permission to use this command.");
+}
+
 export interface AuthContext extends Context {
   kanClient?: KanApiClient;
   workspacePublicId?: string;

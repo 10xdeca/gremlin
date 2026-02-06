@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for docs-only changes
+        id: docs-check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Get changed files using git diff instead of gh CLI
+            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+            if echo "$FILES" | grep -qvE '\.(md|txt)$|^LICENSE$'; then
+              echo "skip=false" >> $GITHUB_OUTPUT
+            else
+              echo "skip=true" >> $GITHUB_OUTPUT
+              echo "Docs-only changes detected, skipping build"
+            fi
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.docs-check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        if: steps.docs-check.outputs.skip != 'true'
+        run: npm install
+
+      - name: Type check
+        if: steps.docs-check.outputs.skip != 'true'
+        run: npm run typecheck
+
+      - name: Build
+        if: steps.docs-check.outputs.skip != 'true'
+        run: npm run build
