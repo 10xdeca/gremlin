@@ -195,25 +195,25 @@ export function formatStaleTaskReminder(
   return text;
 }
 
-export function formatUnassignedReminder(
-  card: KanCard,
-  board: KanBoard,
-  list: KanList,
-  workspaceSlug: string,
-  creatorUsername?: string | null
+export function formatUnassignedReminders(
+  tasks: Array<{
+    card: KanCard;
+    board: KanBoard;
+    list: KanList;
+    creatorUsername?: string | null;
+  }>
 ): string {
-  const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
+  let text = `👤 ${tasks.length} task${tasks.length === 1 ? " needs" : "s need"} an owner\n\n`;
 
-  let text = `👤 Task needs an owner\n\n`;
-  text += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
-  text += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n\n`;
-
-  if (creatorUsername) {
-    text += `@${creatorUsername}, who's working on this\\?\n\n`;
-  } else {
-    text += `Who's working on this\\?\n\n`;
-  }
+  text += tasks
+    .map((item, index) => {
+      const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+      const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+      const title = `[${escapeMarkdown(item.card.title)}](${cardUrl})`;
+      const board = `[${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+      return `${index + 1}\\. ${title}\n   ${board}`;
+    })
+    .join("\n\n");
 
   return text;
 }

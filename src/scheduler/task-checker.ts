@@ -13,7 +13,7 @@ import {
   formatNoDueDateReminder,
   formatVagueTaskReminder,
   formatStaleTaskReminder,
-  formatUnassignedReminder,
+  formatUnassignedReminders,
   formatNoTasksReminder,
 } from "../utils/format.js";
 import { evaluateTaskVagueness } from "../services/vagueness-evaluator.js";
@@ -411,28 +411,51 @@ async function checkUnassignedTasks(
       workspaceLink.workspacePublicId
     );
 
+    // Filter to tasks that need a reminder
+    const tasksToRemind: Array<{
+      card: KanCard;
+      board: KanBoard;
+      list: KanList;
+      creatorUsername?: string | null;
+    }> = [];
+
     for (const { card, board, list } of tasks) {
       if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "unassigned"))) {
         continue;
       }
 
-      // Look up creator's Telegram username
       let creatorUsername: string | null = null;
       if (card.createdBy?.email) {
         const creatorLink = userLinksByEmail.get(card.createdBy.email.toLowerCase());
         creatorUsername = creatorLink?.telegramUsername ?? null;
       }
 
-      const message = formatUnassignedReminder(card, board, list, workspaceSlug, creatorUsername);
+      tasksToRemind.push({ card, board, list, creatorUsername });
+    }
 
-      await sendReminderMessage(
-        bot,
-        workspaceLink.telegramChatId,
-        card.publicId,
-        "unassigned",
-        message,
-        card.title,
-        workspaceLink.messageThreadId
+    if (tasksToRemind.length === 0) return;
+
+    const message = formatUnassignedReminders(tasksToRemind);
+
+    try {
+      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+        parse_mode: "MarkdownV2",
+        link_preview_options: { is_disabled: true },
+        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+      });
+
+      // Record reminders for all cards in the batch
+      for (const { card } of tasksToRemind) {
+        await upsertReminder(card.publicId, workspaceLink.telegramChatId, "unassigned");
+      }
+
+      console.log(
+        `Sent unassigned reminder for ${tasksToRemind.length} tasks to chat ${workspaceLink.telegramChatId}`
+      );
+    } catch (error) {
+      console.error(
+        `Failed to send unassigned reminder to chat ${workspaceLink.telegramChatId}:`,
+        error
       );
     }
   } catch (error) {

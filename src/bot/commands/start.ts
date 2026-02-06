@@ -18,6 +18,12 @@ export async function startCommand(ctx: Context) {
     return;
   }
 
+  // Only allow linking in group chats
+  if (args && ctx.chat?.type === "private") {
+    await ctx.reply("Workspaces can only be linked in group chats, not DMs.");
+    return;
+  }
+
   // Admin check (only for linking, not for viewing status)
   if (args && !isAdmin(userId)) {
     await replyNotAdmin(ctx);
