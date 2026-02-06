@@ -45,6 +45,10 @@ jobs:
         if: steps.docs-check.outputs.skip != 'true'
         run: npm run typecheck
 
+      - name: Test
+        if: steps.docs-check.outputs.skip != 'true'
+        run: npm test
+
       - name: Build
         if: steps.docs-check.outputs.skip != 'true'
         run: npm run build

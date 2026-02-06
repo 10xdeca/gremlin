@@ -1,5 +1,5 @@
 import type { AuthContext } from "../middleware/auth.js";
-import { getUserLink, getWorkspaceLink } from "../../db/queries.js";
+import { getUserLinkWithResolution, getWorkspaceLink } from "../../db/queries.js";
 import { getServiceClient } from "../../api/kan-client.js";
 import { formatCardList } from "../../utils/format.js";
 
@@ -12,8 +12,8 @@ export async function myTasksCommand(ctx: AuthContext) {
     return;
   }
 
-  // Get user link to find their email
-  const userLink = await getUserLink(userId);
+  // Get user link to find their email (with username fallback for placeholder IDs)
+  const userLink = await getUserLinkWithResolution(userId, ctx.from?.username);
   if (!userLink) {
     await ctx.reply(
       "Your account hasn't been mapped yet.\n\n" +

@@ -75,6 +75,31 @@ export async function updateUserLink(
     .run();
 }
 
+export async function getUserLinkWithResolution(
+  telegramUserId: number,
+  telegramUsername?: string
+) {
+  // 1. Try by real user ID first
+  let userLink = await getUserLink(telegramUserId);
+  if (userLink) return userLink;
+
+  // 2. Try by username if provided
+  if (telegramUsername) {
+    userLink = await getUserLinkByTelegramUsername(telegramUsername);
+    if (userLink) {
+      // 3. Update record with real user ID for future lookups
+      db.update(schema.telegramUserLinks)
+        .set({ telegramUserId })
+        .where(eq(schema.telegramUserLinks.telegramUsername, telegramUsername))
+        .run();
+      userLink.telegramUserId = telegramUserId;
+      return userLink;
+    }
+  }
+
+  return null;
+}
+
 export async function getUserLinkByTelegramUsername(username: string) {
   const results = db
     .select()

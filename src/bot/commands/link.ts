@@ -1,7 +1,7 @@
 import type { Context } from "grammy";
 import {
   deleteUserLink,
-  getUserLink,
+  getUserLinkWithResolution,
 } from "../../db/queries.js";
 
 // Show user's link status (simplified - mapping is done by admin via /map)
@@ -14,7 +14,7 @@ export async function linkCommand(ctx: Context) {
     return;
   }
 
-  const existingLink = await getUserLink(userId);
+  const existingLink = await getUserLinkWithResolution(userId, username);
   if (existingLink) {
     await ctx.reply(
       `Your account is mapped to: *${existingLink.kanUserEmail}*\n\n` +
@@ -40,7 +40,7 @@ export async function unlinkMeCommand(ctx: Context) {
     return;
   }
 
-  const existingLink = await getUserLink(userId);
+  const existingLink = await getUserLinkWithResolution(userId, ctx.from?.username);
   if (!existingLink) {
     await ctx.reply("Your account is not linked.");
     return;
