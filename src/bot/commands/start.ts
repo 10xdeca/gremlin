@@ -6,6 +6,7 @@ import {
   getWorkspaceLink,
   updateWorkspaceLinkTopic,
 } from "../../db/queries.js";
+import { isAdmin, replyNotAdmin } from "../middleware/auth.js";
 
 export async function startCommand(ctx: Context) {
   const chatId = ctx.chat?.id;
@@ -14,6 +15,12 @@ export async function startCommand(ctx: Context) {
 
   if (!chatId || !userId) {
     await ctx.reply("Could not identify chat or user.");
+    return;
+  }
+
+  // Admin check (only for linking, not for viewing status)
+  if (args && !isAdmin(userId)) {
+    await replyNotAdmin(ctx);
     return;
   }
 
@@ -110,9 +117,15 @@ export async function startCommand(ctx: Context) {
 
 export async function unlinkCommand(ctx: Context) {
   const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
 
   if (!chatId) {
     await ctx.reply("Could not identify chat.");
+    return;
+  }
+
+  if (!isAdmin(userId)) {
+    await replyNotAdmin(ctx);
     return;
   }
 
@@ -131,9 +144,15 @@ export async function unlinkCommand(ctx: Context) {
 
 export async function setTopicCommand(ctx: Context) {
   const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
 
   if (!chatId) {
     await ctx.reply("Could not identify chat.");
+    return;
+  }
+
+  if (!isAdmin(userId)) {
+    await replyNotAdmin(ctx);
     return;
   }
 

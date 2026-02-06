@@ -8,6 +8,7 @@ import {
   getAllWorkspaceLinks,
   updateUserLink,
 } from "../../db/queries.js";
+import { isAdmin, replyNotAdmin } from "../middleware/auth.js";
 
 // Map a Telegram user to a Kan email (admin only, via DM)
 export async function mapCommand(ctx: Context) {
@@ -15,6 +16,11 @@ export async function mapCommand(ctx: Context) {
 
   if (!adminId) {
     await ctx.reply("Could not identify user.");
+    return;
+  }
+
+  if (!isAdmin(adminId)) {
+    await replyNotAdmin(ctx);
     return;
   }
 
@@ -27,23 +33,9 @@ export async function mapCommand(ctx: Context) {
   }
 
   const args = ctx.message?.text?.split(/\s+/).slice(1);
+  const subcommand = args?.[0]?.toLowerCase();
 
-  if (!args || args.length < 2) {
-    await ctx.reply(
-      "Map a Telegram user to their Kan email:\n\n" +
-        "`/map @username email@example.com`\n\n" +
-        "Example:\n" +
-        "`/map @nick nick@xdeca.com`\n\n" +
-        "To see all mappings: `/map list`\n" +
-        "To remove a mapping: `/map remove @username`",
-      { parse_mode: "Markdown" }
-    );
-    return;
-  }
-
-  const subcommand = args[0].toLowerCase();
-
-  // List all mappings
+  // Handle subcommands that don't need 2 args
   if (subcommand === "list") {
     const { getAllUserLinks } = await import("../../db/queries.js");
     const userLinks = await getAllUserLinks();
@@ -60,6 +52,19 @@ export async function mapCommand(ctx: Context) {
     await ctx.reply("*User Mappings:*\n\n" + lines.join("\n"), {
       parse_mode: "Markdown",
     });
+    return;
+  }
+
+  if (!args || args.length < 2) {
+    await ctx.reply(
+      "Map a Telegram user to their Kan email:\n\n" +
+        "`/map @username email@example.com`\n\n" +
+        "Example:\n" +
+        "`/map @nick nick@xdeca.com`\n\n" +
+        "To see all mappings: `/map list`\n" +
+        "To remove a mapping: `/map remove @username`",
+      { parse_mode: "Markdown" }
+    );
     return;
   }
 
