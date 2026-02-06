@@ -80,7 +80,26 @@ describe("formatCardList", () => {
     const result = formatCardList(cards);
     expect(result).toContain("1.");
     expect(result).toContain("Test Task");
-    expect(result).toContain("abc123");
+    expect(result).toContain("Board 1");
+    expect(result).toContain("To Do");
+  });
+
+  it("links task titles to Kan when workspaceSlug is provided", () => {
+    const cards = [
+      {
+        card: {
+          publicId: "abc123",
+          title: "Test Task",
+          dueDate: null,
+          members: [],
+        } as any,
+        board: { name: "Board 1", slug: "board-1" } as any,
+        list: { name: "To Do" } as any,
+      },
+    ];
+    const result = formatCardList(cards, { workspaceSlug: "my-workspace" });
+    expect(result).toContain("[Test Task](https://tasks.xdeca.com/my-workspace/board-1?card=abc123)");
+    expect(result).toContain("Board 1");
     expect(result).toContain("To Do");
   });
 });
