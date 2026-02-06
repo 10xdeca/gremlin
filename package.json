@@ -8,7 +8,10 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
@@ -24,6 +27,7 @@
     "@types/node": "^22.10.0",
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.18"
   }
 }
