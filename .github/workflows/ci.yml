@@ -12,22 +12,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for docs-only changes
         id: docs-check
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files -q '.files[].path')
-            if echo "$FILES" | grep -qvE '\.(md|txt)$|LICENSE'; then
+            # Get changed files using git diff instead of gh CLI
+            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+            if echo "$FILES" | grep -qvE '\.(md|txt)$|^LICENSE$'; then
               echo "skip=false" >> $GITHUB_OUTPUT
             else
               echo "skip=true" >> $GITHUB_OUTPUT
+              echo "Docs-only changes detected, skipping build"
             fi
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Setup Node.js
         if: steps.docs-check.outputs.skip != 'true'
