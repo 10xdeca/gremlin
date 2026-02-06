@@ -202,18 +202,18 @@ export function formatUnassignedReminder(
   workspaceSlug: string,
   creatorUsername?: string | null
 ): string {
+  const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
+  const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
+
   let text = `👤 Task needs an owner\n\n`;
-  text += `*${escapeMarkdown(card.title)}*\n`;
-  text += `List: ${escapeMarkdown(list.name)} in ${escapeMarkdown(board.name)}\n\n`;
+  text += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
+  text += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n\n`;
 
   if (creatorUsername) {
     text += `@${creatorUsername}, who's working on this\\?\n\n`;
   } else {
     text += `Who's working on this\\?\n\n`;
   }
-
-  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  text += `[View task](${url})`;
 
   return text;
 }
