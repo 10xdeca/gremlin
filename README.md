@@ -1,4 +1,4 @@
-# Kan Bot
+# xdeca-pm-bot
 
 Telegram bot for [Kan.bn](https://tasks.xdeca.com) task management. Sends reminders about overdue, stale, vague, and unassigned tasks. Uses Claude AI for vagueness evaluation.
 
