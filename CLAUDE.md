@@ -1,4 +1,4 @@
-# Kan Bot
+# xdeca-pm-bot
 
 Telegram bot for Kan.bn task management. TypeScript + Grammy + SQLite (Drizzle ORM).
 
@@ -22,7 +22,7 @@ npm run typecheck    # tsc --noEmit
 ## Deployment
 
 This is the source code only. Deployment config is in `xdeca-infra/kan-bot/`:
-- `docker-compose.yml` builds from this source (rsynced to `kan-bot/src/` on server)
+- `docker-compose.yml` builds from this source (rsynced from `xdeca-pm-bot/` to `kan-bot/src/` on server)
 - Secrets in `secrets.yaml` (SOPS-encrypted)
 - Deploy: `./scripts/deploy-to.sh 13.54.159.183 kan-bot` from xdeca-infra repo
 - Server: AWS Lightsail VPS at 13.54.159.183
