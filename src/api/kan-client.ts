@@ -191,12 +191,13 @@ class KanApiClient {
       const fullBoard = await this.getBoard(board.publicId);
 
       for (const list of fullBoard.lists || []) {
-        // Skip lists that appear to be "done" or "archive" lists
+        // Skip lists that appear to be "done", "archive", or "backlog" lists
         const listNameLower = list.name.toLowerCase();
         if (
           listNameLower.includes("done") ||
           listNameLower.includes("complete") ||
-          listNameLower.includes("archive")
+          listNameLower.includes("archive") ||
+          listNameLower.includes("backlog")
         ) {
           continue;
         }
@@ -225,12 +226,13 @@ class KanApiClient {
       const fullBoard = await this.getBoard(board.publicId);
 
       for (const list of fullBoard.lists || []) {
-        // Skip "done" lists for active task view
+        // Skip "done", "archive", and "backlog" lists for active task view
         const listNameLower = list.name.toLowerCase();
         if (
           listNameLower.includes("done") ||
           listNameLower.includes("complete") ||
-          listNameLower.includes("archive")
+          listNameLower.includes("archive") ||
+          listNameLower.includes("backlog")
         ) {
           continue;
         }
