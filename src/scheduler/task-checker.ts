@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import type { Bot } from "grammy";
-import { getServiceClient, type KanCard, type KanBoard, type KanList, type KanApiClient } from "../api/kan-client.js";
+import { getServiceClient, type KanCard, type KanBoard, type KanList, type KanWorkspaceMember } from "../api/kan-client.js";
 import {
   getAllWorkspaceLinks,
   getAllUserLinks,
@@ -111,14 +111,16 @@ async function processWorkspace(
   workspaceLink: WorkspaceLink,
   userLinksByEmail: UserLinkMap
 ) {
-  // Use the service client
-  let client;
   let workspaceSlug = "";
+  let workspaceMembers: KanWorkspaceMember[] = [];
+  let fullBoards: KanBoard[] = [];
 
   try {
-    client = getServiceClient();
+    const client = getServiceClient();
     const workspace = await client.getWorkspace(workspaceLink.workspacePublicId);
     workspaceSlug = workspace.slug;
+    workspaceMembers = workspace.members;
+    fullBoards = await client.getFullBoards(workspaceLink.workspacePublicId);
   } catch (error) {
     console.log(
       `Cannot access workspace ${workspaceLink.workspaceName}: ${error}`
@@ -134,17 +136,17 @@ async function processWorkspace(
   // Build list of checks to run
   const checks: Promise<void>[] = [
     // Always check overdue and stale tasks
-    checkOverdueTasks(bot, client, workspaceLink, workspaceSlug, userLinksByEmail),
-    checkStaleTasks(bot, client, workspaceLink, workspaceSlug, userLinksByEmail),
-    checkUnassignedTasks(bot, client, workspaceLink, workspaceSlug, userLinksByEmail),
+    checkOverdueTasks(bot, fullBoards, workspaceLink, workspaceSlug, userLinksByEmail),
+    checkStaleTasks(bot, fullBoards, workspaceLink, workspaceSlug, userLinksByEmail),
+    checkUnassignedTasks(bot, fullBoards, workspaceLink, workspaceSlug, userLinksByEmail),
   ];
 
   // Only nag about vagueness, missing due dates, and missing tasks in sprint planning window
   if (inPlanningWindow) {
     checks.push(
-      checkNoDueDates(bot, client, workspaceLink, workspaceSlug, userLinksByEmail),
-      checkVagueTasks(bot, client, workspaceLink, workspaceSlug, userLinksByEmail),
-      checkNoTasks(bot, client, workspaceLink, workspaceSlug, userLinksByEmail)
+      checkNoDueDates(bot, fullBoards, workspaceLink, workspaceSlug, userLinksByEmail),
+      checkVagueTasks(bot, fullBoards, workspaceLink, workspaceSlug, userLinksByEmail),
+      checkNoTasks(bot, fullBoards, workspaceMembers, workspaceLink, workspaceSlug, userLinksByEmail)
     );
   }
 
@@ -212,39 +214,51 @@ async function sendReminderMessage(
 // Check for overdue tasks
 async function checkOverdueTasks(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
   try {
-    const overdueTasks = await client.getOverdueCards(
-      workspaceLink.workspacePublicId
-    );
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          listNameLower.includes("done") ||
+          listNameLower.includes("complete") ||
+          listNameLower.includes("archive") ||
+          listNameLower.includes("backlog")
+        ) {
+          continue;
+        }
 
-    for (const { card, board, list } of overdueTasks) {
-      if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "overdue"))) {
-        continue;
+        for (const card of list.cards || []) {
+          if (!card.dueDate || new Date(card.dueDate) >= new Date()) continue;
+
+          if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "overdue"))) {
+            continue;
+          }
+
+          const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
+          const message = formatOverdueReminder(
+            card,
+            board,
+            list,
+            assigneeUsernames,
+            workspaceSlug
+          );
+
+          await sendReminderMessage(
+            bot,
+            workspaceLink.telegramChatId,
+            card.publicId,
+            "overdue",
+            message,
+            card.title,
+            workspaceLink.messageThreadId
+          );
+        }
       }
-
-      const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      const message = formatOverdueReminder(
-        card,
-        board,
-        list,
-        assigneeUsernames,
-        workspaceSlug
-      );
-
-      await sendReminderMessage(
-        bot,
-        workspaceLink.telegramChatId,
-        card.publicId,
-        "overdue",
-        message,
-        card.title,
-        workspaceLink.messageThreadId
-      );
     }
   } catch (error) {
     console.error(
@@ -257,16 +271,12 @@ async function checkOverdueTasks(
 // Check for tasks without due dates
 async function checkNoDueDates(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
   try {
-    const tasks = await client.getCardsWithoutDueDate(
-      workspaceLink.workspacePublicId
-    );
-
     const tasksToRemind: Array<{
       card: KanCard;
       board: KanBoard;
@@ -274,13 +284,29 @@ async function checkNoDueDates(
       assigneeUsernames: string[];
     }> = [];
 
-    for (const { card, board, list } of tasks) {
-      if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date"))) {
-        continue;
-      }
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          listNameLower.includes("done") ||
+          listNameLower.includes("complete") ||
+          listNameLower.includes("archive") ||
+          listNameLower.includes("backlog")
+        ) {
+          continue;
+        }
 
-      const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      tasksToRemind.push({ card, board, list, assigneeUsernames });
+        for (const card of list.cards || []) {
+          if (card.dueDate) continue;
+
+          if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date"))) {
+            continue;
+          }
+
+          const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
+          tasksToRemind.push({ card, board, list, assigneeUsernames });
+        }
+      }
     }
 
     if (tasksToRemind.length === 0) return;
@@ -318,14 +344,12 @@ async function checkNoDueDates(
 // Check for vague tasks using LLM evaluation
 async function checkVagueTasks(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
   try {
-    const candidates = await client.getVagueTaskCandidates(workspaceLink.workspacePublicId);
-
     const tasksToRemind: Array<{
       card: KanCard;
       board: KanBoard;
@@ -334,24 +358,41 @@ async function checkVagueTasks(
       reason?: string | null;
     }> = [];
 
-    for (const { card, board, list } of candidates) {
-      if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "vague"))) {
-        continue;
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          listNameLower.includes("done") ||
+          listNameLower.includes("complete") ||
+          listNameLower.includes("archive")
+        ) {
+          continue;
+        }
+
+        for (const card of list.cards || []) {
+          // Pre-filter: only evaluate tasks with short/no descriptions
+          const descLength = card.description?.trim().length || 0;
+          if (descLength >= 100) continue;
+
+          if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "vague"))) {
+            continue;
+          }
+
+          // Use LLM to evaluate if the task is actually vague
+          const evaluation = await evaluateTaskVagueness({
+            title: card.title,
+            description: card.description,
+            listName: list.name,
+          });
+
+          if (!evaluation.isVague) {
+            continue;
+          }
+
+          const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
+          tasksToRemind.push({ card, board, list, assigneeUsernames, reason: evaluation.reason });
+        }
       }
-
-      // Use LLM to evaluate if the task is actually vague
-      const evaluation = await evaluateTaskVagueness({
-        title: card.title,
-        description: card.description,
-        listName: list.name,
-      });
-
-      if (!evaluation.isVague) {
-        continue;
-      }
-
-      const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      tasksToRemind.push({ card, board, list, assigneeUsernames, reason: evaluation.reason });
     }
 
     if (tasksToRemind.length === 0) return;
@@ -389,38 +430,62 @@ async function checkVagueTasks(
 // Check for stale tasks (in progress too long)
 async function checkStaleTasks(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
+  const staleDays = 14;
+  const staleThreshold = Date.now() - staleDays * 24 * 60 * 60 * 1000;
+
   try {
-    const tasks = await client.getStaleTasks(workspaceLink.workspacePublicId);
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          !listNameLower.includes("progress") &&
+          !listNameLower.includes("doing") &&
+          !listNameLower.includes("working") &&
+          !listNameLower.includes("review")
+        ) {
+          continue;
+        }
 
-    for (const { card, board, list, daysInList } of tasks) {
-      if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "stale"))) {
-        continue;
+        for (const card of list.cards || []) {
+          const cardAny = card as KanCard & { updatedAt?: string; createdAt?: string };
+          const lastActivity = cardAny.updatedAt || cardAny.createdAt;
+          if (!lastActivity) continue;
+
+          const lastActivityDate = new Date(lastActivity).getTime();
+          if (lastActivityDate >= staleThreshold) continue;
+
+          const daysInList = Math.floor((Date.now() - lastActivityDate) / (1000 * 60 * 60 * 24));
+
+          if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "stale"))) {
+            continue;
+          }
+
+          const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
+          const message = formatStaleTaskReminder(
+            card,
+            board,
+            list,
+            assigneeUsernames,
+            workspaceSlug,
+            daysInList
+          );
+
+          await sendReminderMessage(
+            bot,
+            workspaceLink.telegramChatId,
+            card.publicId,
+            "stale",
+            message,
+            card.title,
+            workspaceLink.messageThreadId
+          );
+        }
       }
-
-      const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      const message = formatStaleTaskReminder(
-        card,
-        board,
-        list,
-        assigneeUsernames,
-        workspaceSlug,
-        daysInList
-      );
-
-      await sendReminderMessage(
-        bot,
-        workspaceLink.telegramChatId,
-        card.publicId,
-        "stale",
-        message,
-        card.title,
-        workspaceLink.messageThreadId
-      );
     }
   } catch (error) {
     console.error(
@@ -433,17 +498,12 @@ async function checkStaleTasks(
 // Check for unassigned tasks
 async function checkUnassignedTasks(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
   try {
-    const tasks = await client.getUnassignedTasks(
-      workspaceLink.workspacePublicId
-    );
-
-    // Filter to tasks that need a reminder
     const tasksToRemind: Array<{
       card: KanCard;
       board: KanBoard;
@@ -451,18 +511,34 @@ async function checkUnassignedTasks(
       creatorUsername?: string | null;
     }> = [];
 
-    for (const { card, board, list } of tasks) {
-      if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "unassigned"))) {
-        continue;
-      }
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          listNameLower.includes("done") ||
+          listNameLower.includes("complete") ||
+          listNameLower.includes("archive") ||
+          listNameLower.includes("backlog")
+        ) {
+          continue;
+        }
 
-      let creatorUsername: string | null = null;
-      if (card.createdBy?.email) {
-        const creatorLink = userLinksByEmail.get(card.createdBy.email.toLowerCase());
-        creatorUsername = creatorLink?.telegramUsername ?? null;
-      }
+        for (const card of list.cards || []) {
+          if (card.members && card.members.length > 0) continue;
 
-      tasksToRemind.push({ card, board, list, creatorUsername });
+          if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "unassigned"))) {
+            continue;
+          }
+
+          let creatorUsername: string | null = null;
+          if (card.createdBy?.email) {
+            const creatorLink = userLinksByEmail.get(card.createdBy.email.toLowerCase());
+            creatorUsername = creatorLink?.telegramUsername ?? null;
+          }
+
+          tasksToRemind.push({ card, board, list, creatorUsername });
+        }
+      }
     }
 
     if (tasksToRemind.length === 0) return;
@@ -501,14 +577,40 @@ async function checkUnassignedTasks(
 // Check for workspace members with no tasks assigned
 async function checkNoTasks(
   bot: Bot,
-  client: KanApiClient,
+  boards: KanBoard[],
+  members: KanWorkspaceMember[],
   workspaceLink: WorkspaceLink,
   workspaceSlug: string,
   userLinksByEmail: UserLinkMap
 ) {
   try {
-    const membersWithNoTasks = await client.getMembersWithNoTasks(
-      workspaceLink.workspacePublicId
+    // Collect all member publicIds who have at least one active task
+    const membersWithTasks = new Set<string>();
+
+    for (const board of boards) {
+      for (const list of board.lists || []) {
+        const listNameLower = list.name.toLowerCase();
+        if (
+          listNameLower.includes("done") ||
+          listNameLower.includes("complete") ||
+          listNameLower.includes("archive")
+        ) {
+          continue;
+        }
+
+        for (const card of list.cards || []) {
+          if (card.members) {
+            for (const member of card.members) {
+              membersWithTasks.add(member.publicId);
+            }
+          }
+        }
+      }
+    }
+
+    // Find active members who have no tasks
+    const membersWithNoTasks = members.filter(
+      (m) => m.status === "active" && !membersWithTasks.has(m.publicId)
     );
 
     for (const member of membersWithNoTasks) {

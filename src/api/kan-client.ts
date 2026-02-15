@@ -142,6 +142,17 @@ class KanApiClient {
     return this.request("GET", path);
   }
 
+  // Fetch all boards with their lists and cards populated (single batch)
+  async getFullBoards(workspacePublicId: string): Promise<KanBoard[]> {
+    const boards = await this.getBoards(workspacePublicId);
+    const fullBoards: KanBoard[] = [];
+    for (const board of boards) {
+      const fullBoard = await this.getBoard(board.publicId);
+      fullBoards.push(fullBoard);
+    }
+    return fullBoards;
+  }
+
   // Cards
   async getCard(cardPublicId: string): Promise<KanCard> {
     return this.request("GET", `/cards/${cardPublicId}`);
