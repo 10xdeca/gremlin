@@ -21,12 +21,12 @@ npm run typecheck    # tsc --noEmit
 
 ## Deployment
 
-This is the source code only. Deployment config is in `xdeca-infra/kan-bot/`:
-- `docker-compose.yml` builds from this source (rsynced from `xdeca-pm-bot/` to `kan-bot/src/` on server)
+This is the source code only. Deployment config is in `xdeca-infra/xdeca-pm-bot/`:
+- `docker-compose.yml` builds from this source (rsynced from `xdeca-pm-bot/` to `xdeca-pm-bot/src/` on server)
 - Secrets in `secrets.yaml` (SOPS-encrypted)
-- Deploy: `./scripts/deploy-to.sh 13.54.159.183 kan-bot` from xdeca-infra repo
-- Server: AWS Lightsail VPS at 13.54.159.183
-- Logs: `ssh ubuntu@13.54.159.183 'docker logs -f kan-bot'`
+- Deploy: `./scripts/deploy-to.sh 34.116.110.7 xdeca-pm-bot` from xdeca-infra repo
+- Server: GCP Compute Engine (e2-medium) at 34.116.110.7
+- Logs: `ssh ubuntu@34.116.110.7 'docker logs -f xdeca-pm-bot'`
 
 ## Key Patterns
 
