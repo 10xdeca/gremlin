@@ -96,74 +96,77 @@ export function formatOverdueReminder(
     (Date.now() - new Date(card.dueDate!).getTime()) / (1000 * 60 * 60 * 24)
   );
 
+  const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
+  const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
+
   let text = `Task overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}\\!\n\n`;
-  text += `*${escapeMarkdown(card.title)}*\n`;
-  text += `List: ${escapeMarkdown(list.name)} in ${escapeMarkdown(board.name)}\n`;
+  text += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
+  text += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
   text += `Due: ${formatDueDate(card.dueDate)}\n\n`;
 
   if (mentions) {
     text += `${mentions} `;
   }
 
-  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  text += `[View task](${url})`;
+  return text;
+}
+
+export function formatNoDueDateReminders(
+  tasks: Array<{
+    card: KanCard;
+    board: KanBoard;
+    list: KanList;
+    assigneeUsernames: string[];
+  }>
+): string {
+  let text = `📅 ${tasks.length} task${tasks.length === 1 ? " needs" : "s need"} a due date\n\n`;
+
+  text += tasks
+    .map((item, index) => {
+      const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+      const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+      const title = `[${escapeMarkdown(item.card.title)}](${cardUrl})`;
+      const board = `[${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+      const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
+      let line = `${index + 1}\\. ${title}\n   ${board}`;
+      if (mentions) {
+        line += `\n   ${mentions}`;
+      }
+      return line;
+    })
+    .join("\n\n");
 
   return text;
 }
 
-export function formatNoDueDateReminder(
-  card: KanCard,
-  board: KanBoard,
-  list: KanList,
-  assigneeUsernames: string[],
-  workspaceSlug: string
+export function formatVagueTaskReminders(
+  tasks: Array<{
+    card: KanCard;
+    board: KanBoard;
+    list: KanList;
+    assigneeUsernames: string[];
+    reason?: string | null;
+  }>
 ): string {
-  const mentions = assigneeUsernames.map((u) => `@${u}`).join(" ");
+  let text = `📝 ${tasks.length} task${tasks.length === 1 ? " needs" : "s need"} more detail\n\n`;
 
-  let text = `📅 Task needs a due date\n\n`;
-  text += `*${escapeMarkdown(card.title)}*\n`;
-  text += `List: ${escapeMarkdown(list.name)} in ${escapeMarkdown(board.name)}\n\n`;
-
-  if (mentions) {
-    text += `${mentions}, when do you expect to finish this\\?\n\n`;
-  } else {
-    text += `When should this be done\\?\n\n`;
-  }
-
-  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  text += `[View task](${url})`;
-
-  return text;
-}
-
-export function formatVagueTaskReminder(
-  card: KanCard,
-  board: KanBoard,
-  list: KanList,
-  assigneeUsernames: string[],
-  workspaceSlug: string,
-  reason?: string | null
-): string {
-  const mentions = assigneeUsernames.map((u) => `@${u}`).join(" ");
-
-  let text = `📝 Task needs more detail\n\n`;
-  text += `*${escapeMarkdown(card.title)}*\n`;
-  text += `List: ${escapeMarkdown(list.name)} in ${escapeMarkdown(board.name)}\n`;
-
-  if (reason) {
-    text += `_${escapeMarkdown(reason)}_\n`;
-  }
-
-  text += `\n`;
-
-  if (mentions) {
-    text += `${mentions}, can you add more detail\\?\n\n`;
-  } else {
-    text += `This task needs more detail\\.\n\n`;
-  }
-
-  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  text += `[View task](${url})`;
+  text += tasks
+    .map((item, index) => {
+      const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+      const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+      const title = `[${escapeMarkdown(item.card.title)}](${cardUrl})`;
+      const board = `[${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+      const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
+      let line = `${index + 1}\\. ${title}\n   ${board}`;
+      if (item.reason) {
+        line += `\n   _${escapeMarkdown(item.reason)}_`;
+      }
+      if (mentions) {
+        line += `\n   ${mentions}`;
+      }
+      return line;
+    })
+    .join("\n\n");
 
   return text;
 }
@@ -178,9 +181,12 @@ export function formatStaleTaskReminder(
 ): string {
   const mentions = assigneeUsernames.map((u) => `@${u}`).join(" ");
 
+  const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
+  const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
+
   let text = `⏰ Task stuck in progress\n\n`;
-  text += `*${escapeMarkdown(card.title)}*\n`;
-  text += `List: ${escapeMarkdown(list.name)} in ${escapeMarkdown(board.name)}\n`;
+  text += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
+  text += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
   text += `In progress for ${daysStale} day${daysStale === 1 ? "" : "s"}\n\n`;
 
   if (mentions) {
@@ -188,9 +194,6 @@ export function formatStaleTaskReminder(
   } else {
     text += `This task may be blocked\\.\n\n`;
   }
-
-  const url = `${KAN_BASE_URL}/cards/${card.publicId}`;
-  text += `[View task](${url})`;
 
   return text;
 }

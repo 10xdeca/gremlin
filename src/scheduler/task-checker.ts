@@ -10,8 +10,8 @@ import {
 } from "../db/queries.js";
 import {
   formatOverdueReminder,
-  formatNoDueDateReminder,
-  formatVagueTaskReminder,
+  formatNoDueDateReminders,
+  formatVagueTaskReminders,
   formatStaleTaskReminder,
   formatUnassignedReminders,
   formatNoTasksReminder,
@@ -267,28 +267,44 @@ async function checkNoDueDates(
       workspaceLink.workspacePublicId
     );
 
+    const tasksToRemind: Array<{
+      card: KanCard;
+      board: KanBoard;
+      list: KanList;
+      assigneeUsernames: string[];
+    }> = [];
+
     for (const { card, board, list } of tasks) {
       if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date"))) {
         continue;
       }
 
       const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      const message = formatNoDueDateReminder(
-        card,
-        board,
-        list,
-        assigneeUsernames,
-        workspaceSlug
-      );
+      tasksToRemind.push({ card, board, list, assigneeUsernames });
+    }
 
-      await sendReminderMessage(
-        bot,
-        workspaceLink.telegramChatId,
-        card.publicId,
-        "no_due_date",
-        message,
-        card.title,
-        workspaceLink.messageThreadId
+    if (tasksToRemind.length === 0) return;
+
+    const message = formatNoDueDateReminders(tasksToRemind);
+
+    try {
+      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+        parse_mode: "MarkdownV2",
+        link_preview_options: { is_disabled: true },
+        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+      });
+
+      for (const { card } of tasksToRemind) {
+        await upsertReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date");
+      }
+
+      console.log(
+        `Sent no-due-date reminder for ${tasksToRemind.length} tasks to chat ${workspaceLink.telegramChatId}`
+      );
+    } catch (error) {
+      console.error(
+        `Failed to send no-due-date reminder to chat ${workspaceLink.telegramChatId}:`,
+        error
       );
     }
   } catch (error) {
@@ -310,6 +326,14 @@ async function checkVagueTasks(
   try {
     const candidates = await client.getVagueTaskCandidates(workspaceLink.workspacePublicId);
 
+    const tasksToRemind: Array<{
+      card: KanCard;
+      board: KanBoard;
+      list: KanList;
+      assigneeUsernames: string[];
+      reason?: string | null;
+    }> = [];
+
     for (const { card, board, list } of candidates) {
       if (!(await shouldSendReminder(card.publicId, workspaceLink.telegramChatId, "vague"))) {
         continue;
@@ -327,23 +351,31 @@ async function checkVagueTasks(
       }
 
       const assigneeUsernames = getAssigneeUsernames(card, userLinksByEmail);
-      const message = formatVagueTaskReminder(
-        card,
-        board,
-        list,
-        assigneeUsernames,
-        workspaceSlug,
-        evaluation.reason
-      );
+      tasksToRemind.push({ card, board, list, assigneeUsernames, reason: evaluation.reason });
+    }
 
-      await sendReminderMessage(
-        bot,
-        workspaceLink.telegramChatId,
-        card.publicId,
-        "vague",
-        message,
-        card.title,
-        workspaceLink.messageThreadId
+    if (tasksToRemind.length === 0) return;
+
+    const message = formatVagueTaskReminders(tasksToRemind);
+
+    try {
+      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+        parse_mode: "MarkdownV2",
+        link_preview_options: { is_disabled: true },
+        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+      });
+
+      for (const { card } of tasksToRemind) {
+        await upsertReminder(card.publicId, workspaceLink.telegramChatId, "vague");
+      }
+
+      console.log(
+        `Sent vague task reminder for ${tasksToRemind.length} tasks to chat ${workspaceLink.telegramChatId}`
+      );
+    } catch (error) {
+      console.error(
+        `Failed to send vague task reminder to chat ${workspaceLink.telegramChatId}:`,
+        error
       );
     }
   } catch (error) {
