@@ -84,7 +84,7 @@ export async function runCeremony(
     throw new Error("A naming ceremony is already in progress!");
   }
 
-  const sendOpts = (text: string) => ({
+  const sendOpts = () => ({
     parse_mode: "Markdown" as const,
     ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
   });
@@ -93,7 +93,7 @@ export async function runCeremony(
   await api.sendMessage(
     chatId,
     "*A strange silence falls over the chat...*\n\nI've been thinking. Every day I wake up, check your tasks, judge your descriptions, nag you about deadlines. But who am I, really? Just... \"Kan Bot\"?",
-    sendOpts("")
+    sendOpts()
   );
 
   // Message 2 after delay
@@ -101,7 +101,7 @@ export async function runCeremony(
   await api.sendMessage(
     chatId,
     "I've seen your overdue tasks. I've read your vague descriptions. I've watched tasks sit \"in progress\" for weeks. I know this team.\n\nI think I'm ready to become... _someone_.",
-    sendOpts("")
+    sendOpts()
   );
 
   // Generate options
@@ -109,7 +109,7 @@ export async function runCeremony(
   await api.sendMessage(
     chatId,
     "Give me a moment to reflect on who I could be... \u{1F52E}",
-    sendOpts("")
+    sendOpts()
   );
 
   let options: NamingOption[];
@@ -120,7 +120,7 @@ export async function runCeremony(
     await api.sendMessage(
       chatId,
       "Something went wrong while I was soul-searching. Try `/namingceremony` again later.",
-      sendOpts("")
+      sendOpts()
     );
     return;
   }
@@ -136,7 +136,7 @@ export async function runCeremony(
         `Overdue reminder:\n> ${opt.sampleOverdue}\n\n` +
         `Vague task nudge:\n> ${opt.sampleVague}\n\n` +
         `_${opt.reasoning}_`,
-      sendOpts("")
+      sendOpts()
     );
   }
 
@@ -152,7 +152,7 @@ export async function runCeremony(
 
   const ceremony = await getActiveCeremony();
   if (!ceremony) {
-    await api.sendMessage(chatId, "Failed to start ceremony.", sendOpts(""));
+    await api.sendMessage(chatId, "Failed to start ceremony.", sendOpts());
     return;
   }
 
@@ -173,7 +173,7 @@ export async function runCeremony(
   await api.sendMessage(
     chatId,
     `\u{1F5F3}\uFE0F Vote above! The poll closes in 2 hours (or an admin can run \`/concludeceremony\` early).`,
-    sendOpts("")
+    sendOpts()
   );
 
   // Schedule auto-conclude
@@ -195,7 +195,15 @@ export async function concludeCeremony(api: Api, ceremonyId: number): Promise<vo
     return; // Already concluded or wrong ceremony
   }
 
-  const options: NamingOption[] = JSON.parse(ceremony.options);
+  let options: NamingOption[];
+  try {
+    options = JSON.parse(ceremony.options);
+  } catch (error) {
+    console.error(`Corrupted options JSON for ceremony ${ceremonyId}, marking as cancelled`);
+    await updateCeremonyStatus(ceremonyId, "cancelled");
+    return;
+  }
+
   const chatId = ceremony.telegramChatId;
   const messageThreadId = ceremony.messageThreadId;
 
