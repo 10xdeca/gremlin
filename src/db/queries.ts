@@ -1,4 +1,4 @@
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, desc } from "drizzle-orm";
 import { db, schema } from "./client.js";
 
 // Workspace Links
@@ -180,4 +180,76 @@ export async function cleanOldReminders(olderThanDays: number = 7) {
     .delete(schema.telegramReminders)
     .where(lt(schema.telegramReminders.lastReminderAt, cutoff))
     .run();
+}
+
+// Bot Identity
+export async function getBotIdentityFromDb() {
+  const results = db
+    .select()
+    .from(schema.botIdentity)
+    .orderBy(desc(schema.botIdentity.chosenAt))
+    .limit(1)
+    .all();
+  return results[0] || null;
+}
+
+export async function saveBotIdentity(data: {
+  name: string;
+  pronouns: string;
+  tone: string;
+  toneDescription: string | null;
+  chosenInChatId: number | null;
+}) {
+  return db.insert(schema.botIdentity).values(data).run();
+}
+
+// Naming Ceremonies
+export async function getActiveCeremony() {
+  const results = db
+    .select()
+    .from(schema.namingCeremonies)
+    .where(eq(schema.namingCeremonies.status, "active"))
+    .all();
+  return results[0] || null;
+}
+
+export async function createCeremony(data: {
+  telegramChatId: number;
+  messageThreadId: number | null;
+  options: string;
+  concludesAt: Date;
+  initiatedByUserId: number;
+}) {
+  return db.insert(schema.namingCeremonies).values(data).run();
+}
+
+export async function updateCeremonyStatus(id: number, status: string) {
+  return db
+    .update(schema.namingCeremonies)
+    .set({ status })
+    .where(eq(schema.namingCeremonies.id, id))
+    .run();
+}
+
+export async function updateCeremonyPollMessageId(id: number, pollMessageId: number) {
+  return db
+    .update(schema.namingCeremonies)
+    .set({ pollMessageId })
+    .where(eq(schema.namingCeremonies.id, id))
+    .run();
+}
+
+export async function getExpiredCeremonies() {
+  const now = new Date();
+  const results = db
+    .select()
+    .from(schema.namingCeremonies)
+    .where(
+      and(
+        eq(schema.namingCeremonies.status, "active"),
+        lt(schema.namingCeremonies.concludesAt, now)
+      )
+    )
+    .all();
+  return results;
 }

@@ -7,7 +7,9 @@ import {
   getLastReminder,
   upsertReminder,
   cleanOldReminders,
+  getExpiredCeremonies,
 } from "../db/queries.js";
+import { concludeCeremony } from "../services/naming-ceremony.js";
 import {
   formatOverdueReminder,
   formatNoDueDateReminders,
@@ -64,6 +66,19 @@ export function startTaskChecker(bot: Bot) {
   cron.schedule(cronExpression, async () => {
     console.log("Running task check...");
     await checkAllTaskIssues(bot);
+  });
+
+  // Check for expired naming ceremonies every 5 minutes
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      const expired = await getExpiredCeremonies();
+      for (const ceremony of expired) {
+        console.log(`Auto-concluding expired naming ceremony ${ceremony.id}`);
+        await concludeCeremony(bot.api, ceremony.id);
+      }
+    } catch (error) {
+      console.error("Error checking expired ceremonies:", error);
+    }
   });
 
   // Also clean old reminders daily at 3am

@@ -34,6 +34,28 @@ sqlite.exec(`
     created_by_telegram_user_id INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS bot_identity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    pronouns TEXT NOT NULL,
+    tone TEXT NOT NULL,
+    tone_description TEXT,
+    chosen_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    chosen_in_chat_id INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS naming_ceremonies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL,
+    message_thread_id INTEGER,
+    poll_message_id INTEGER,
+    options TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    concludes_at INTEGER NOT NULL,
+    initiated_by_user_id INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS telegram_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_public_id TEXT NOT NULL,
