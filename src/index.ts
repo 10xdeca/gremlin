@@ -14,6 +14,7 @@ import { overdueCommand } from "./bot/commands/overdue.js";
 import { doneCommand } from "./bot/commands/done.js";
 import { commentCommand } from "./bot/commands/comment.js";
 import { helpCommand } from "./bot/commands/help.js";
+import { namingCeremonyCommand, concludeCeremonyCommand } from "./bot/commands/namingceremony.js";
 
 // Import scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -48,6 +49,8 @@ bot.command("overdue", overdueCommand);
 bot.command("done", doneCommand);
 bot.command("comment", commentCommand);
 bot.command("help", helpCommand);
+bot.command("namingceremony", namingCeremonyCommand);
+bot.command("concludeceremony", concludeCeremonyCommand);
 
 // Handle errors
 bot.catch((err) => {
@@ -72,6 +75,8 @@ async function main() {
     { command: "done", description: "Mark a task as complete" },
     { command: "comment", description: "Add a comment to a task" },
     { command: "help", description: "Show available commands" },
+    { command: "namingceremony", description: "Start a bot naming ceremony (admin)" },
+    { command: "concludeceremony", description: "End the naming ceremony early (admin)" },
   ]);
   console.log("Commands registered");
 

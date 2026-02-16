@@ -35,3 +35,27 @@ export const telegramReminders = sqliteTable("telegram_reminders", {
 
 // Valid reminder types
 export type ReminderType = "overdue" | "no_due_date" | "vague" | "stale" | "unassigned" | "no_tasks";
+
+// Stores the bot's chosen identity after a naming ceremony
+export const botIdentity = sqliteTable("bot_identity", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  pronouns: text("pronouns").notNull(),
+  tone: text("tone").notNull(),
+  toneDescription: text("tone_description"),
+  chosenAt: integer("chosen_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  chosenInChatId: integer("chosen_in_chat_id"),
+});
+
+// Tracks active/completed naming ceremonies
+export const namingCeremonies = sqliteTable("naming_ceremonies", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  telegramChatId: integer("telegram_chat_id").notNull(),
+  messageThreadId: integer("message_thread_id"),
+  pollMessageId: integer("poll_message_id"),
+  options: text("options").notNull(), // JSON string of NamingOption[]
+  status: text("status").notNull().default("active"), // active | concluded | cancelled
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  concludesAt: integer("concludes_at", { mode: "timestamp" }).notNull(),
+  initiatedByUserId: integer("initiated_by_user_id").notNull(),
+});
