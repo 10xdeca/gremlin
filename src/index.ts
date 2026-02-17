@@ -5,34 +5,33 @@ import { Bot } from "grammy";
 // Initialize database
 import "./db/client.js";
 
-// Import commands
-import { startCommand, unlinkCommand, setTopicCommand } from "./bot/commands/start.js";
-import { linkCommand, unlinkMeCommand } from "./bot/commands/link.js";
-import { mapCommand } from "./bot/commands/map.js";
-import { myTasksCommand } from "./bot/commands/mytasks.js";
-import { overdueCommand } from "./bot/commands/overdue.js";
-import { doneCommand } from "./bot/commands/done.js";
-import { commentCommand } from "./bot/commands/comment.js";
-import { helpCommand } from "./bot/commands/help.js";
-import { namingCeremonyCommand, concludeCeremonyCommand } from "./bot/commands/namingceremony.js";
-import { newtaskCommand } from "./bot/commands/newtask.js";
-import { setdefaultCommand, handleSetDefaultBoardCallback, handleSetDefaultListCallback } from "./bot/commands/setdefault.js";
-import { handleTaskCreateCallback, handleTaskDismissCallback } from "./bot/callbacks/task-suggestion.js";
-import {
-  handleNewTaskBoardCallback,
-  handleNewTaskListCallback,
-  handleNewTaskMemberToggleCallback,
-  handleNewTaskDoneCallback,
-  handleNewTaskSkipCallback,
-  handleNewTaskCancelCallback,
-} from "./bot/callbacks/newtask-flow.js";
-import { messageListener } from "./bot/handlers/message-listener.js";
+// Agent infrastructure
+import { mcpManager } from "./agent/mcp-manager.js";
+import { runAgentLoop } from "./agent/agent-loop.js";
 
-// Import scheduler
+// Custom tool registration
+import { registerChatConfigTools } from "./tools/chat-config.js";
+import { registerUserMappingTools } from "./tools/user-mapping.js";
+import { registerSprintInfoTools } from "./tools/sprint-info.js";
+import { registerBotIdentityTools } from "./tools/bot-identity.js";
+
+// Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
+// Admin check
+const ADMIN_USER_IDS: Set<number> = new Set(
+  (process.env.ADMIN_USER_IDS || "")
+    .split(",")
+    .map((id) => parseInt(id.trim(), 10))
+    .filter((id) => !isNaN(id))
+);
 
+function isAdmin(userId: number | undefined): boolean {
+  if (!userId) return false;
+  return ADMIN_USER_IDS.has(userId);
+}
+
+const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
   console.error("TELEGRAM_BOT_TOKEN environment variable is required");
   process.exit(1);
@@ -49,67 +48,66 @@ const bot = new Bot(token, {
   },
 });
 
-// Register commands
-bot.command("start", startCommand);
-bot.command("unlink", unlinkCommand);
-bot.command("settopic", setTopicCommand);
-bot.command("link", linkCommand);
-bot.command("unlinkme", unlinkMeCommand);
-bot.command("map", mapCommand);
-bot.command("mytasks", myTasksCommand);
-bot.command("overdue", overdueCommand);
-bot.command("done", doneCommand);
-bot.command("comment", commentCommand);
-bot.command("help", helpCommand);
-bot.command("namingceremony", namingCeremonyCommand);
-bot.command("concludeceremony", concludeCeremonyCommand);
-bot.command("newtask", newtaskCommand);
-bot.command("setdefault", setdefaultCommand);
+// --- Agent message handler (ALL messages go through the agent) ---
 
-// Register callback query handlers
-bot.callbackQuery(/^sd:b:/, handleSetDefaultBoardCallback);
-bot.callbackQuery(/^sd:l:/, handleSetDefaultListCallback);
-bot.callbackQuery(/^task:create:/, handleTaskCreateCallback);
-bot.callbackQuery(/^task:dismiss:/, handleTaskDismissCallback);
-bot.callbackQuery(/^nt:b:/, handleNewTaskBoardCallback);
-bot.callbackQuery(/^nt:l:/, handleNewTaskListCallback);
-bot.callbackQuery(/^nt:m:/, handleNewTaskMemberToggleCallback);
-bot.callbackQuery(/^nt:ok:/, handleNewTaskDoneCallback);
-bot.callbackQuery(/^nt:sk:/, handleNewTaskSkipCallback);
-bot.callbackQuery(/^nt:x:/, handleNewTaskCancelCallback);
+bot.on("message:text", async (ctx) => {
+  const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
+  const text = ctx.message?.text;
+  if (!chatId || !userId || !text) return;
 
-// Register message listener for task detection (AFTER all commands)
-bot.on("message:text", messageListener);
+  try {
+    const response = await runAgentLoop(ctx.api, {
+      text,
+      chatId,
+      userId,
+      username: ctx.from?.username,
+      isAdmin: isAdmin(userId),
+      messageThreadId: ctx.message?.message_thread_id,
+      replyToText: ctx.message?.reply_to_message?.text,
+      replyToUsername: ctx.message?.reply_to_message?.from?.username,
+    });
+
+    if (response) {
+      await ctx.reply(response, {
+        parse_mode: "Markdown",
+        link_preview_options: { is_disabled: true },
+        ...(ctx.message?.message_thread_id
+          ? { message_thread_id: ctx.message.message_thread_id }
+          : {}),
+      });
+    }
+  } catch (error) {
+    console.error("Agent loop error:", error);
+    await ctx.reply("Something went wrong processing your message. Please try again.");
+  }
+});
 
 // Handle errors
 bot.catch((err) => {
   console.error("Bot error:", err);
 });
 
-// Start the bot
-async function main() {
-  console.log("Starting Kan Bot...");
+// --- Startup ---
 
-  // Verify the token works
+async function main() {
+  console.log("Starting xdeca-pm-bot (agent mode)...");
+
+  // Register custom tools
+  registerChatConfigTools();
+  registerUserMappingTools();
+  registerSprintInfoTools();
+  registerBotIdentityTools();
+
+  // Initialize MCP servers
+  await mcpManager.init();
+
+  // Verify the bot token
   const botInfo = await bot.api.getMe();
   console.log(`Bot verified: @${botInfo.username}`);
 
-  // Set bot commands for the menu
-  await bot.api.setMyCommands([
-    { command: "start", description: "Link chat to a Kan workspace" },
-    { command: "settopic", description: "Set reminders to post in this topic" },
-    { command: "link", description: "Link your Kan account (use in DM)" },
-    { command: "mytasks", description: "View your assigned tasks" },
-    { command: "overdue", description: "View all overdue tasks" },
-    { command: "done", description: "Mark a task as complete" },
-    { command: "comment", description: "Add a comment to a task" },
-    { command: "newtask", description: "Create a new task" },
-    { command: "setdefault", description: "Set default board/list for new tasks (admin)" },
-    { command: "help", description: "Show available commands" },
-    { command: "namingceremony", description: "Start a bot naming ceremony (admin)" },
-    { command: "concludeceremony", description: "End the naming ceremony early (admin)" },
-  ]);
-  console.log("Commands registered");
+  // Clear old bot commands menu (all interaction is natural language now)
+  await bot.api.setMyCommands([]);
 
   // Start the task checker (overdue, vague, stale, unassigned, no due date)
   startTaskChecker(bot);
@@ -126,14 +124,12 @@ main().catch((err) => {
 });
 
 // Handle graceful shutdown
-process.on("SIGINT", () => {
+async function shutdown() {
   console.log("Shutting down...");
+  await mcpManager.shutdown();
   bot.stop();
   process.exit(0);
-});
+}
 
-process.on("SIGTERM", () => {
-  console.log("Shutting down...");
-  bot.stop();
-  process.exit(0);
-});
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
