@@ -94,6 +94,7 @@ export async function runAgentLoop(
       let result: string;
       let isError = false;
       try {
+        console.log(`Tool call: ${toolUse.name}(${JSON.stringify(toolUse.input)})`);
         result = await executeTool(
           toolUse.name,
           toolUse.input as Record<string, unknown>
