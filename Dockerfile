@@ -11,6 +11,13 @@ COPY package.json package-lock.json* ./
 # Install dependencies with npm (not pnpm) to build native modules
 RUN npm install
 
+# Install MCP server dependencies
+COPY mcp-servers/kan/package.json mcp-servers/kan/
+RUN cd mcp-servers/kan && npm install
+
+COPY mcp-servers/outline/package.json mcp-servers/outline/
+RUN cd mcp-servers/outline && npm install
+
 # Copy source
 COPY . .
 
