@@ -42,10 +42,20 @@ export function shouldCheckMessage(
   return true;
 }
 
-/** Records a cooldown for a chat (called after making an LLM check) */
+/** Records a cooldown for a chat (called after a task is detected and surfaced) */
 export function recordCooldown(chatId: number): void {
   cooldowns.set(chatId, Date.now());
 }
+
+// Periodic cleanup of expired cooldowns
+setInterval(() => {
+  const now = Date.now();
+  for (const [chatId, timestamp] of cooldowns.entries()) {
+    if (now - timestamp > COOLDOWN_MS) {
+      cooldowns.delete(chatId);
+    }
+  }
+}, 10 * 60 * 1000); // Clean every 10 minutes
 
 /**
  * Calls Claude Haiku to classify whether a message contains a task intent.

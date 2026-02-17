@@ -12,7 +12,8 @@ export interface ParsedMentions {
  * Optionally filters out the bot's own username.
  */
 export function extractMentions(text: string, botUsername?: string): ParsedMentions {
-  const mentionRegex = /@(\w+)/g;
+  // Match @username only at word boundaries (not in emails like user@example.com)
+  const mentionRegex = /(?<![a-zA-Z0-9.])@(\w+)/g;
   const usernames: string[] = [];
 
   let match;
@@ -24,8 +25,8 @@ export function extractMentions(text: string, botUsername?: string): ParsedMenti
     usernames.push(username);
   }
 
-  // Strip @mentions from the text
-  const cleanText = text.replace(/@\w+/g, "").replace(/\s+/g, " ").trim();
+  // Strip @mentions from the text (same boundary check as extraction)
+  const cleanText = text.replace(/(?<![a-zA-Z0-9.])@\w+/g, "").replace(/\s+/g, " ").trim();
 
   return { cleanText, usernames };
 }

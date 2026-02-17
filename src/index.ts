@@ -59,8 +59,8 @@ bot.command("newtask", newtaskCommand);
 bot.command("setdefault", setdefaultCommand);
 
 // Register callback query handlers
-bot.callbackQuery(/^setdefault:board:/, handleSetDefaultBoardCallback);
-bot.callbackQuery(/^setdefault:list:/, handleSetDefaultListCallback);
+bot.callbackQuery(/^sd:b:/, handleSetDefaultBoardCallback);
+bot.callbackQuery(/^sd:l:/, handleSetDefaultListCallback);
 bot.callbackQuery(/^task:create:/, handleTaskCreateCallback);
 bot.callbackQuery(/^task:dismiss:/, handleTaskDismissCallback);
 

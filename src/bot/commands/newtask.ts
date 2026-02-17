@@ -1,7 +1,8 @@
 import type { Context } from "grammy";
-import { getWorkspaceLink, getDefaultBoardConfig } from "../../db/queries.js";
+import { getWorkspaceLink } from "../../db/queries.js";
 import { getServiceClient } from "../../api/kan-client.js";
 import { extractMentions, resolveMentionsToMembers } from "../../utils/mentions.js";
+import { resolveTargetList } from "../../utils/resolve-list.js";
 
 const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
 
@@ -49,31 +50,10 @@ export async function newtaskCommand(ctx: Context) {
     }
 
     // Resolve target list
-    const config = await getDefaultBoardConfig(chatId);
-    let listPublicId: string;
-    let listName: string;
-    let boardName: string;
-
-    if (config) {
-      listPublicId = config.listPublicId;
-      listName = config.listName;
-      boardName = config.boardName;
-    } else {
-      // Auto-detect: first board, Backlog/To Do/first list
-      const boards = await client.getBoards(workspaceLink.workspacePublicId);
-      if (!boards.length) {
-        await ctx.reply("No boards found in this workspace.");
-        return;
-      }
-      const board = boards[0];
-      const list = await client.findBacklogOrTodoList(board.publicId);
-      if (!list) {
-        await ctx.reply(`No lists found in board "${board.name}".`);
-        return;
-      }
-      listPublicId = list.publicId;
-      listName = list.name;
-      boardName = board.name;
+    const target = await resolveTargetList(chatId, workspaceLink.workspacePublicId);
+    if (!target) {
+      await ctx.reply("No boards or lists found in this workspace. Create a board first.");
+      return;
     }
 
     // Resolve @mentions to Kan member IDs
@@ -81,14 +61,14 @@ export async function newtaskCommand(ctx: Context) {
     const memberPublicIds = resolved.map((r) => r.memberPublicId);
 
     // Create the card
-    const card = await client.createCard(listPublicId, {
+    const card = await client.createCard(target.listPublicId, {
       title,
       memberPublicIds: memberPublicIds.length > 0 ? memberPublicIds : undefined,
     });
 
     // Build response
     const cardUrl = `${KAN_BASE_URL}/card/${card.publicId}`;
-    let response = `Task created in *${boardName}* → ${listName}:\n\n` +
+    let response = `Task created in *${target.boardName}* → ${target.listName}:\n\n` +
       `*${title}*\n` +
       `[Open in Kan](${cardUrl})`;
 

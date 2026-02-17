@@ -1,9 +1,10 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { getWorkspaceLink, getDefaultBoardConfig, getUserLinkByTelegramUsername } from "../../db/queries.js";
+import { getWorkspaceLink, getUserLinkByTelegramUsername } from "../../db/queries.js";
 import { getServiceClient } from "../../api/kan-client.js";
 import { shouldCheckMessage, detectTask, recordCooldown } from "../../services/task-detector.js";
 import { extractMentions, resolveMentionsToMembers } from "../../utils/mentions.js";
+import { resolveTargetList } from "../../utils/resolve-list.js";
 import { storeSuggestion } from "../callbacks/task-suggestion.js";
 
 const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
@@ -30,37 +31,20 @@ export async function messageListener(ctx: Context) {
   // Guards: skip commands, short messages, bot messages, cooldown
   if (!shouldCheckMessage(chatId, text, isBot)) return;
 
-  // Record cooldown before the LLM call to prevent concurrent checks
-  recordCooldown(chatId);
-
   const detection = await detectTask(text);
 
   // Only surface medium/high confidence detections
   if (!detection.isTask || detection.confidence === "low") return;
 
+  // Record cooldown only when a task is actually detected (not wasted on non-tasks)
+  recordCooldown(chatId);
+
   const client = getServiceClient();
 
   try {
     // Resolve target list
-    const config = await getDefaultBoardConfig(chatId);
-    let listPublicId: string;
-    let listName: string;
-    let boardName: string;
-
-    if (config) {
-      listPublicId = config.listPublicId;
-      listName = config.listName;
-      boardName = config.boardName;
-    } else {
-      const boards = await client.getBoards(workspaceLink.workspacePublicId);
-      if (!boards.length) return;
-      const board = boards[0];
-      const list = await client.findBacklogOrTodoList(board.publicId);
-      if (!list) return;
-      listPublicId = list.publicId;
-      listName = list.name;
-      boardName = board.name;
-    }
+    const target = await resolveTargetList(chatId, workspaceLink.workspacePublicId);
+    if (!target) return;
 
     // Resolve @mentions from the message
     const botUsername = ctx.me?.username;
@@ -73,7 +57,6 @@ export async function messageListener(ctx: Context) {
     if (detection.isInfrastructure && INFRA_ASSIGNEE_USERNAME) {
       const infraLink = await getUserLinkByTelegramUsername(INFRA_ASSIGNEE_USERNAME);
       if (infraLink?.workspaceMemberPublicId) {
-        // Avoid duplicates
         if (!memberPublicIds.includes(infraLink.workspaceMemberPublicId)) {
           memberPublicIds.push(infraLink.workspaceMemberPublicId);
           assigneeNames.push(`@${INFRA_ASSIGNEE_USERNAME}`);
@@ -83,13 +66,13 @@ export async function messageListener(ctx: Context) {
 
     if (detection.isDirectRequest) {
       // Direct request: create the card immediately
-      const card = await client.createCard(listPublicId, {
+      const card = await client.createCard(target.listPublicId, {
         title: detection.title,
         memberPublicIds: memberPublicIds.length > 0 ? memberPublicIds : undefined,
       });
 
       const cardUrl = `${KAN_BASE_URL}/card/${card.publicId}`;
-      let response = `Task created in *${boardName}* → ${listName}:\n\n` +
+      let response = `Task created in *${target.boardName}* → ${target.listName}:\n\n` +
         `*${detection.title}*\n` +
         `[Open in Kan](${cardUrl})`;
 
@@ -106,15 +89,15 @@ export async function messageListener(ctx: Context) {
       // Implicit suggestion: ask with inline buttons
       const suggestionId = storeSuggestion({
         title: detection.title,
-        listPublicId,
-        boardName,
-        listName,
+        listPublicId: target.listPublicId,
+        boardName: target.boardName,
+        listName: target.listName,
         memberPublicIds,
         assigneeNames,
         chatId,
       });
 
-      let suggestionText = `Detected a task:\n\n*${detection.title}*\n→ ${boardName} / ${listName}`;
+      let suggestionText = `Detected a task:\n\n*${detection.title}*\n→ ${target.boardName} / ${target.listName}`;
       if (assigneeNames.length > 0) {
         suggestionText += `\nAssign to: ${assigneeNames.join(", ")}`;
       }
