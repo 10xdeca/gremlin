@@ -300,7 +300,7 @@ async function checkOverdueTasks(
           let message = `Task overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}\\!\n\n`;
           message += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
           message += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
-          message += `Due: ${formatDueDate(card.dueDate)}\n\n`;
+          message += `Due: ${escapeMarkdown(formatDueDate(card.dueDate))}\n\n`;
           if (mentions) message += `${mentions} `;
 
           await sendReminderMessage(bot, workspaceLink.telegramChatId, card.publicId, "overdue", message, card.title, workspaceLink.messageThreadId);

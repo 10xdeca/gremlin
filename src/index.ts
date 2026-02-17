@@ -48,6 +48,48 @@ const bot = new Bot(token, {
   },
 });
 
+// --- Rate limiting for group chats ---
+
+const MIN_MESSAGE_LENGTH = 4;
+const GROUP_COOLDOWN_MS = 30_000; // 30s cooldown per chat for non-targeted messages
+const lastAgentCall = new Map<number, number>();
+
+let botUsername: string | undefined;
+
+/**
+ * Decide whether to skip a message to avoid unnecessary LLM calls.
+ * In DMs, all messages are processed. In groups, messages must be:
+ * - @mentioning the bot, OR
+ * - replying to the bot, OR
+ * - long enough AND outside the per-chat cooldown window
+ */
+function shouldSkipMessage(
+  text: string,
+  chatId: number,
+  chatType: string,
+  replyToBotId?: number,
+  botId?: number
+): boolean {
+  // Always process DMs
+  if (chatType === "private") return false;
+
+  // Always process @mentions of the bot
+  if (botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) return false;
+
+  // Always process replies to the bot
+  if (botId && replyToBotId === botId) return false;
+
+  // Skip very short messages in groups ("ok", "lol", "k", etc.)
+  if (text.trim().length < MIN_MESSAGE_LENGTH) return true;
+
+  // Apply per-chat cooldown for non-targeted group messages
+  const now = Date.now();
+  const lastCall = lastAgentCall.get(chatId);
+  if (lastCall && now - lastCall < GROUP_COOLDOWN_MS) return true;
+
+  return false;
+}
+
 // --- Agent message handler (ALL messages go through the agent) ---
 
 bot.on("message:text", async (ctx) => {
@@ -55,6 +97,20 @@ bot.on("message:text", async (ctx) => {
   const userId = ctx.from?.id;
   const text = ctx.message?.text;
   if (!chatId || !userId || !text) return;
+
+  // Rate limit in group chats
+  if (shouldSkipMessage(
+    text,
+    chatId,
+    ctx.chat.type,
+    ctx.message?.reply_to_message?.from?.id,
+    ctx.me?.id
+  )) return;
+
+  // Track last agent call for cooldown
+  if (ctx.chat.type !== "private") {
+    lastAgentCall.set(chatId, Date.now());
+  }
 
   try {
     const response = await runAgentLoop(ctx.api, {
@@ -102,8 +158,9 @@ async function main() {
   // Initialize MCP servers
   await mcpManager.init();
 
-  // Verify the bot token
+  // Verify the bot token and cache username for @mention detection
   const botInfo = await bot.api.getMe();
+  botUsername = botInfo.username;
   console.log(`Bot verified: @${botInfo.username}`);
 
   // Clear old bot commands menu (all interaction is natural language now)
