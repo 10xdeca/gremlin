@@ -8,6 +8,9 @@ import { storeSuggestion } from "../callbacks/task-suggestion.js";
 
 const INFRA_ASSIGNEE_USERNAME = process.env.INFRA_ASSIGNEE_USERNAME;
 
+/** Emojis that signal "make a task from the message above" */
+const POINT_UP_EMOJIS = /^[\s☝️👆⬆️🔼👆🏻👆🏼👆🏽👆🏾👆🏿☝🏻☝🏼☝🏽☝🏾☝🏿\u{261D}\u{FE0F}]*$/u;
+
 /**
  * Message listener registered via bot.on("message:text").
  * Handles two paths:
@@ -53,14 +56,30 @@ async function handleBotMention(
   botUsername: string | undefined,
   workspacePublicId: string,
 ) {
-  const detection = await detectTask(text);
+  // Check for reply-with-pointer pattern: "@gremlin ☝️" as a reply to another message
+  const replyText = ctx.message?.reply_to_message?.text;
+  const { cleanText: mentionStripped } = extractMentions(text, botUsername);
+  const isPointerReply = !!replyText && POINT_UP_EMOJIS.test(mentionStripped);
+
+  // Use the replied-to message text for task detection if pointing up at it,
+  // otherwise use the @mention message itself
+  const taskSourceText = isPointerReply ? replyText : text;
+
+  const detection = await detectTask(taskSourceText);
 
   // If the LLM says it's not a task, silently ignore
   if (!detection.isTask) return;
 
   try {
-    // Resolve @mentions from the message (excluding bot username)
+    // Resolve @mentions — from the mention message (for assignees like @nick)
+    // and from the replied-to message (if pointer reply)
     const { usernames } = extractMentions(text, botUsername);
+    if (isPointerReply) {
+      const replyMentions = extractMentions(replyText, botUsername);
+      for (const u of replyMentions.usernames) {
+        if (!usernames.includes(u)) usernames.push(u);
+      }
+    }
     const { resolved, unresolved } = await resolveMentionsToMembers(usernames);
     const memberPublicIds = resolved.map((r) => r.memberPublicId);
     const memberNames = resolved.map((r) => `@${r.username}`);
