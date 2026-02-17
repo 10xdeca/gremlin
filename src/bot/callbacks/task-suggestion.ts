@@ -79,14 +79,18 @@ export async function handleTaskCreateCallback(ctx: Context) {
         parse_mode: "Markdown",
         link_preview_options: { is_disabled: true },
       });
-    } else {
+    } else if (result.type === "picker") {
       await ctx.editMessageText(result.text, {
         parse_mode: "Markdown",
         reply_markup: result.keyboard,
       });
+    } else {
+      await ctx.editMessageText(result.text);
     }
 
-    await ctx.answerCallbackQuery({ text: result.type === "created" ? "Task created!" : "Select options..." });
+    const cbText = result.type === "created" ? "Task created!"
+      : result.type === "error" ? "Error" : "Select options...";
+    await ctx.answerCallbackQuery({ text: cbText });
     deleteSuggestion(suggestionId);
   } catch (error) {
     console.error("Error creating task from suggestion:", error);

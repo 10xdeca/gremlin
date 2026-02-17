@@ -61,11 +61,13 @@ export async function newtaskCommand(ctx: Context) {
         parse_mode: "Markdown",
         link_preview_options: { is_disabled: true },
       });
-    } else {
+    } else if (result.type === "picker") {
       await ctx.reply(result.text, {
         parse_mode: "Markdown",
         reply_markup: result.keyboard,
       });
+    } else {
+      await ctx.reply(result.text);
     }
   } catch (error) {
     console.error("Error creating task:", error);
