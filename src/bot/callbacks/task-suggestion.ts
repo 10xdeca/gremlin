@@ -1,15 +1,11 @@
 import type { Context } from "grammy";
 import { nanoid } from "nanoid";
-import { getServiceClient } from "../../api/kan-client.js";
-
-const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
+import { startNewTaskFlow } from "./newtask-flow.js";
 
 export interface PendingSuggestion {
   id: string;
   title: string;
-  listPublicId: string;
-  boardName: string;
-  listName: string;
+  workspacePublicId: string;
   memberPublicIds: string[];
   /** Names for display (e.g. "@nick") */
   assigneeNames: string[];
@@ -48,7 +44,7 @@ export function deleteSuggestion(id: string): void {
   pendingSuggestions.delete(id);
 }
 
-/** Callback handler for "Create task" button */
+/** Callback handler for "Create task" button — starts the interactive flow */
 export async function handleTaskCreateCallback(ctx: Context) {
   const data = ctx.callbackQuery?.data;
   if (!data) {
@@ -66,26 +62,31 @@ export async function handleTaskCreateCallback(ctx: Context) {
   }
 
   try {
-    const client = getServiceClient();
-    const card = await client.createCard(suggestion.listPublicId, {
+    const result = await startNewTaskFlow({
       title: suggestion.title,
-      memberPublicIds: suggestion.memberPublicIds.length > 0 ? suggestion.memberPublicIds : undefined,
+      chatId: suggestion.chatId,
+      workspacePublicId: suggestion.workspacePublicId,
+      mentionsProvided: suggestion.memberPublicIds.length > 0,
+      resolvedMembers: suggestion.memberPublicIds.map((id, i) => ({
+        memberPublicId: id,
+        displayName: suggestion.assigneeNames[i] ?? id,
+      })),
+      unresolvedMentions: [],
     });
 
-    const cardUrl = `${KAN_BASE_URL}/card/${card.publicId}`;
-    let response = `Task created in *${suggestion.boardName}* → ${suggestion.listName}:\n\n` +
-      `*${suggestion.title}*\n` +
-      `[Open in Kan](${cardUrl})`;
-
-    if (suggestion.assigneeNames.length > 0) {
-      response += `\n\nAssigned to: ${suggestion.assigneeNames.join(", ")}`;
+    if (result.type === "created") {
+      await ctx.editMessageText(result.text, {
+        parse_mode: "Markdown",
+        link_preview_options: { is_disabled: true },
+      });
+    } else {
+      await ctx.editMessageText(result.text, {
+        parse_mode: "Markdown",
+        reply_markup: result.keyboard,
+      });
     }
 
-    await ctx.editMessageText(response, {
-      parse_mode: "Markdown",
-      link_preview_options: { is_disabled: true },
-    });
-    await ctx.answerCallbackQuery({ text: "Task created!" });
+    await ctx.answerCallbackQuery({ text: result.type === "created" ? "Task created!" : "Select options..." });
     deleteSuggestion(suggestionId);
   } catch (error) {
     console.error("Error creating task from suggestion:", error);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { shouldCheckMessage, recordCooldown } from "./task-detector.js";
+import { shouldCheckMessage, recordCooldown, isBotMention } from "./task-detector.js";
 
 describe("shouldCheckMessage", () => {
   beforeEach(() => {
@@ -63,5 +63,36 @@ describe("shouldCheckMessage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("isBotMention", () => {
+  it("detects @botname mention", () => {
+    expect(isBotMention("@gremlin create a task to fix login", "gremlin")).toBe(true);
+  });
+
+  it("detects mention at end of message", () => {
+    expect(isBotMention("hey @gremlin", "gremlin")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isBotMention("@Gremlin fix the login page", "gremlin")).toBe(true);
+    expect(isBotMention("@GREMLIN fix the login page", "gremlin")).toBe(true);
+  });
+
+  it("returns false when bot username is not mentioned", () => {
+    expect(isBotMention("@nick fix the login page", "gremlin")).toBe(false);
+  });
+
+  it("returns false for no bot username provided", () => {
+    expect(isBotMention("@gremlin create a task", undefined)).toBe(false);
+  });
+
+  it("does not match email-style mentions", () => {
+    expect(isBotMention("email gremlin@example.com about this", "gremlin")).toBe(false);
+  });
+
+  it("matches mention in the middle of a message", () => {
+    expect(isBotMention("hey @gremlin please create a task", "gremlin")).toBe(true);
   });
 });

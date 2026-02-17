@@ -18,6 +18,14 @@ import { namingCeremonyCommand, concludeCeremonyCommand } from "./bot/commands/n
 import { newtaskCommand } from "./bot/commands/newtask.js";
 import { setdefaultCommand, handleSetDefaultBoardCallback, handleSetDefaultListCallback } from "./bot/commands/setdefault.js";
 import { handleTaskCreateCallback, handleTaskDismissCallback } from "./bot/callbacks/task-suggestion.js";
+import {
+  handleNewTaskBoardCallback,
+  handleNewTaskListCallback,
+  handleNewTaskMemberToggleCallback,
+  handleNewTaskDoneCallback,
+  handleNewTaskSkipCallback,
+  handleNewTaskCancelCallback,
+} from "./bot/callbacks/newtask-flow.js";
 import { messageListener } from "./bot/handlers/message-listener.js";
 
 // Import scheduler
@@ -63,6 +71,12 @@ bot.callbackQuery(/^sd:b:/, handleSetDefaultBoardCallback);
 bot.callbackQuery(/^sd:l:/, handleSetDefaultListCallback);
 bot.callbackQuery(/^task:create:/, handleTaskCreateCallback);
 bot.callbackQuery(/^task:dismiss:/, handleTaskDismissCallback);
+bot.callbackQuery(/^nt:b:/, handleNewTaskBoardCallback);
+bot.callbackQuery(/^nt:l:/, handleNewTaskListCallback);
+bot.callbackQuery(/^nt:m:/, handleNewTaskMemberToggleCallback);
+bot.callbackQuery(/^nt:ok:/, handleNewTaskDoneCallback);
+bot.callbackQuery(/^nt:sk:/, handleNewTaskSkipCallback);
+bot.callbackQuery(/^nt:x:/, handleNewTaskCancelCallback);
 
 // Register message listener for task detection (AFTER all commands)
 bot.on("message:text", messageListener);
