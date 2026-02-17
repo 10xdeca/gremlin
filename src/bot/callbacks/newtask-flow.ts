@@ -10,7 +10,8 @@ const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
 
 export type FlowStartResult =
   | { type: "created"; text: string }
-  | { type: "picker"; text: string; keyboard: InlineKeyboard };
+  | { type: "picker"; text: string; keyboard: InlineKeyboard }
+  | { type: "error"; text: string };
 
 export interface StartFlowParams {
   title: string;
@@ -112,7 +113,7 @@ export async function startNewTaskFlow(params: StartFlowParams): Promise<FlowSta
   // No default → need board/list selection
   const boards = await client.getBoards(workspacePublicId);
   if (!boards.length) {
-    return { type: "created", text: "No boards found in this workspace. Create a board first." };
+    return { type: "error", text: "No boards found in this workspace. Create a board first." };
   }
 
   // Auto-select if only 1 board
@@ -122,7 +123,7 @@ export async function startNewTaskFlow(params: StartFlowParams): Promise<FlowSta
     const lists = (fullBoard.lists || []).map((l) => ({ publicId: l.publicId, name: l.name }));
 
     if (!lists.length) {
-      return { type: "created", text: "No lists found in this board. Create a list first." };
+      return { type: "error", text: "No lists found in this board. Create a list first." };
     }
 
     const flowData = buildFlowData();

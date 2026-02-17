@@ -53,9 +53,6 @@ async function handleBotMention(
   botUsername: string | undefined,
   workspacePublicId: string,
 ) {
-  // Skip commands (shouldn't happen with @mention, but guard anyway)
-  if (text.startsWith("/")) return;
-
   const detection = await detectTask(text);
 
   // If the LLM says it's not a task, silently ignore
@@ -90,6 +87,8 @@ async function handleBotMention(
       })),
       unresolvedMentions: unresolved,
     });
+
+    if (result.type === "error") return;
 
     if (result.type === "created") {
       await ctx.reply(result.text, {
@@ -164,6 +163,8 @@ async function handlePassiveScan(
         })),
         unresolvedMentions: [],
       });
+
+      if (result.type === "error") return;
 
       if (result.type === "created") {
         await ctx.reply(result.text, {
