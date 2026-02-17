@@ -1,10 +1,7 @@
 import type { Context } from "grammy";
 import { getWorkspaceLink } from "../../db/queries.js";
-import { getServiceClient } from "../../api/kan-client.js";
 import { extractMentions, resolveMentionsToMembers } from "../../utils/mentions.js";
-import { resolveTargetList } from "../../utils/resolve-list.js";
-
-const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
+import { startNewTaskFlow } from "../callbacks/newtask-flow.js";
 
 export async function newtaskCommand(ctx: Context) {
   const chatId = ctx.chat?.id;
@@ -37,8 +34,6 @@ export async function newtaskCommand(ctx: Context) {
     return;
   }
 
-  const client = getServiceClient();
-
   try {
     // Parse @mentions from the input
     const botUsername = ctx.me?.username;
@@ -49,43 +44,29 @@ export async function newtaskCommand(ctx: Context) {
       return;
     }
 
-    // Resolve target list
-    const target = await resolveTargetList(chatId, workspaceLink.workspacePublicId);
-    if (!target) {
-      await ctx.reply("No boards or lists found in this workspace. Create a board first.");
-      return;
-    }
-
     // Resolve @mentions to Kan member IDs
     const { resolved, unresolved } = await resolveMentionsToMembers(usernames);
-    const memberPublicIds = resolved.map((r) => r.memberPublicId);
 
-    // Create the card
-    const card = await client.createCard(target.listPublicId, {
+    const result = await startNewTaskFlow({
       title,
-      memberPublicIds: memberPublicIds.length > 0 ? memberPublicIds : undefined,
+      chatId,
+      workspacePublicId: workspaceLink.workspacePublicId,
+      mentionsProvided: usernames.length > 0,
+      resolvedMembers: resolved.map((r) => ({ memberPublicId: r.memberPublicId, displayName: `@${r.username}` })),
+      unresolvedMentions: unresolved,
     });
 
-    // Build response
-    const cardUrl = `${KAN_BASE_URL}/card/${card.publicId}`;
-    let response = `Task created in *${target.boardName}* → ${target.listName}:\n\n` +
-      `*${title}*\n` +
-      `[Open in Kan](${cardUrl})`;
-
-    if (resolved.length > 0) {
-      const names = resolved.map((r) => `@${r.username}`).join(", ");
-      response += `\n\nAssigned to: ${names}`;
+    if (result.type === "created") {
+      await ctx.reply(result.text, {
+        parse_mode: "Markdown",
+        link_preview_options: { is_disabled: true },
+      });
+    } else {
+      await ctx.reply(result.text, {
+        parse_mode: "Markdown",
+        reply_markup: result.keyboard,
+      });
     }
-
-    if (unresolved.length > 0) {
-      const names = unresolved.map((u) => `@${u}`).join(", ");
-      response += `\n\n⚠️ Could not resolve: ${names} (use \`/map\` to link their accounts)`;
-    }
-
-    await ctx.reply(response, {
-      parse_mode: "Markdown",
-      link_preview_options: { is_disabled: true },
-    });
   } catch (error) {
     console.error("Error creating task:", error);
     await ctx.reply("Error creating task. Please try again.");

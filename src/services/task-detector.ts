@@ -42,6 +42,16 @@ export function shouldCheckMessage(
   return true;
 }
 
+/**
+ * Checks if the message contains an @mention of the bot.
+ * Used to detect direct bot invocations like `@gremlin create a task...`.
+ */
+export function isBotMention(text: string, botUsername?: string): boolean {
+  if (!botUsername) return false;
+  const pattern = new RegExp(`(?<![a-zA-Z0-9.])@${botUsername}\\b`, "i");
+  return pattern.test(text);
+}
+
 /** Records a cooldown for a chat (called after a task is detected and surfaced) */
 export function recordCooldown(chatId: number): void {
   cooldowns.set(chatId, Date.now());

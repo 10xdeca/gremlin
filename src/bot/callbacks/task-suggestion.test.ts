@@ -4,9 +4,7 @@ import { storeSuggestion, getSuggestion, deleteSuggestion } from "./task-suggest
 describe("task suggestion store", () => {
   const baseSuggestion = {
     title: "Fix the login page",
-    listPublicId: "list123",
-    boardName: "Sprint Board",
-    listName: "To Do",
+    workspacePublicId: "ws123",
     memberPublicIds: ["member1"],
     assigneeNames: ["@nick"],
     chatId: 123,

@@ -1,18 +1,18 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { getWorkspaceLink, getUserLinkByTelegramUsername } from "../../db/queries.js";
-import { getServiceClient } from "../../api/kan-client.js";
-import { shouldCheckMessage, detectTask, recordCooldown } from "../../services/task-detector.js";
+import { shouldCheckMessage, detectTask, recordCooldown, isBotMention } from "../../services/task-detector.js";
 import { extractMentions, resolveMentionsToMembers } from "../../utils/mentions.js";
-import { resolveTargetList } from "../../utils/resolve-list.js";
+import { startNewTaskFlow } from "../callbacks/newtask-flow.js";
 import { storeSuggestion } from "../callbacks/task-suggestion.js";
 
-const KAN_BASE_URL = process.env.KAN_BASE_URL || "https://tasks.xdeca.com";
 const INFRA_ASSIGNEE_USERNAME = process.env.INFRA_ASSIGNEE_USERNAME;
 
 /**
  * Message listener registered via bot.on("message:text").
- * Detects task-like messages and either creates cards directly or suggests creation.
+ * Handles two paths:
+ * 1. @mention path — bot is @mentioned directly, bypasses cooldown/min-length guards
+ * 2. Passive scanning path — unchanged guards, uses interactive flow for creation
  */
 export async function messageListener(ctx: Context) {
   const chatId = ctx.chat?.id;
@@ -21,6 +21,9 @@ export async function messageListener(ctx: Context) {
 
   if (!chatId || !text) return;
 
+  // Skip bot messages always
+  if (isBot) return;
+
   // Skip private chats
   if (ctx.chat?.type === "private") return;
 
@@ -28,30 +31,42 @@ export async function messageListener(ctx: Context) {
   const workspaceLink = await getWorkspaceLink(chatId);
   if (!workspaceLink) return;
 
-  // Guards: skip commands, short messages, bot messages, cooldown
-  if (!shouldCheckMessage(chatId, text, isBot)) return;
+  const botUsername = ctx.me?.username;
+  const isMention = isBotMention(text, botUsername);
+
+  if (isMention) {
+    await handleBotMention(ctx, chatId, text, botUsername, workspaceLink.workspacePublicId);
+  } else {
+    await handlePassiveScan(ctx, chatId, text, botUsername, workspaceLink.workspacePublicId);
+  }
+}
+
+/**
+ * @mention path: bot is directly @mentioned.
+ * Bypasses cooldown and min-length guards. Uses LLM to extract task intent,
+ * then starts the interactive flow.
+ */
+async function handleBotMention(
+  ctx: Context,
+  chatId: number,
+  text: string,
+  botUsername: string | undefined,
+  workspacePublicId: string,
+) {
+  // Skip commands (shouldn't happen with @mention, but guard anyway)
+  if (text.startsWith("/")) return;
 
   const detection = await detectTask(text);
 
-  // Only surface medium/high confidence detections
-  if (!detection.isTask || detection.confidence === "low") return;
-
-  // Record cooldown only when a task is actually detected (not wasted on non-tasks)
-  recordCooldown(chatId);
-
-  const client = getServiceClient();
+  // If the LLM says it's not a task, silently ignore
+  if (!detection.isTask) return;
 
   try {
-    // Resolve target list
-    const target = await resolveTargetList(chatId, workspaceLink.workspacePublicId);
-    if (!target) return;
-
-    // Resolve @mentions from the message
-    const botUsername = ctx.me?.username;
+    // Resolve @mentions from the message (excluding bot username)
     const { usernames } = extractMentions(text, botUsername);
-    const { resolved } = await resolveMentionsToMembers(usernames);
+    const { resolved, unresolved } = await resolveMentionsToMembers(usernames);
     const memberPublicIds = resolved.map((r) => r.memberPublicId);
-    const assigneeNames = resolved.map((r) => `@${r.username}`);
+    const memberNames = resolved.map((r) => `@${r.username}`);
 
     // Auto-add infra assignee for infrastructure tasks
     if (detection.isInfrastructure && INFRA_ASSIGNEE_USERNAME) {
@@ -59,47 +74,123 @@ export async function messageListener(ctx: Context) {
       if (infraLink?.workspaceMemberPublicId) {
         if (!memberPublicIds.includes(infraLink.workspaceMemberPublicId)) {
           memberPublicIds.push(infraLink.workspaceMemberPublicId);
-          assigneeNames.push(`@${INFRA_ASSIGNEE_USERNAME}`);
+          memberNames.push(`@${INFRA_ASSIGNEE_USERNAME}`);
         }
       }
     }
 
-    if (detection.isDirectRequest) {
-      // Direct request: create the card immediately
-      const card = await client.createCard(target.listPublicId, {
-        title: detection.title,
-        memberPublicIds: memberPublicIds.length > 0 ? memberPublicIds : undefined,
-      });
+    const result = await startNewTaskFlow({
+      title: detection.title,
+      chatId,
+      workspacePublicId,
+      mentionsProvided: memberPublicIds.length > 0,
+      resolvedMembers: memberPublicIds.map((id, i) => ({
+        memberPublicId: id,
+        displayName: memberNames[i],
+      })),
+      unresolvedMentions: unresolved,
+    });
 
-      const cardUrl = `${KAN_BASE_URL}/card/${card.publicId}`;
-      let response = `Task created in *${target.boardName}* → ${target.listName}:\n\n` +
-        `*${detection.title}*\n` +
-        `[Open in Kan](${cardUrl})`;
-
-      if (assigneeNames.length > 0) {
-        response += `\n\nAssigned to: ${assigneeNames.join(", ")}`;
-      }
-
-      await ctx.reply(response, {
+    if (result.type === "created") {
+      await ctx.reply(result.text, {
         parse_mode: "Markdown",
         link_preview_options: { is_disabled: true },
         reply_parameters: { message_id: ctx.message!.message_id },
       });
     } else {
-      // Implicit suggestion: ask with inline buttons
+      await ctx.reply(result.text, {
+        parse_mode: "Markdown",
+        reply_markup: result.keyboard,
+        reply_parameters: { message_id: ctx.message!.message_id },
+      });
+    }
+
+    recordCooldown(chatId);
+  } catch (error) {
+    console.error("Error handling @mention task:", error);
+  }
+}
+
+/**
+ * Passive scanning path: no @mention.
+ * Uses standard guards (cooldown, min-length, etc.).
+ * Direct requests → interactive flow. Suggestions → Create/Dismiss with flow on Create.
+ */
+async function handlePassiveScan(
+  ctx: Context,
+  chatId: number,
+  text: string,
+  botUsername: string | undefined,
+  workspacePublicId: string,
+) {
+  // Guards: skip commands, short messages, cooldown
+  if (!shouldCheckMessage(chatId, text, false)) return;
+
+  const detection = await detectTask(text);
+
+  // Only surface medium/high confidence detections
+  if (!detection.isTask || detection.confidence === "low") return;
+
+  recordCooldown(chatId);
+
+  try {
+    // Resolve @mentions from the message
+    const { usernames } = extractMentions(text, botUsername);
+    const { resolved } = await resolveMentionsToMembers(usernames);
+    const memberPublicIds = resolved.map((r) => r.memberPublicId);
+    const memberNames = resolved.map((r) => `@${r.username}`);
+
+    // Auto-add infra assignee for infrastructure tasks
+    if (detection.isInfrastructure && INFRA_ASSIGNEE_USERNAME) {
+      const infraLink = await getUserLinkByTelegramUsername(INFRA_ASSIGNEE_USERNAME);
+      if (infraLink?.workspaceMemberPublicId) {
+        if (!memberPublicIds.includes(infraLink.workspaceMemberPublicId)) {
+          memberPublicIds.push(infraLink.workspaceMemberPublicId);
+          memberNames.push(`@${INFRA_ASSIGNEE_USERNAME}`);
+        }
+      }
+    }
+
+    if (detection.isDirectRequest) {
+      // Direct request → start interactive flow immediately
+      const result = await startNewTaskFlow({
+        title: detection.title,
+        chatId,
+        workspacePublicId,
+        mentionsProvided: memberPublicIds.length > 0,
+        resolvedMembers: memberPublicIds.map((id, i) => ({
+          memberPublicId: id,
+          displayName: memberNames[i],
+        })),
+        unresolvedMentions: [],
+      });
+
+      if (result.type === "created") {
+        await ctx.reply(result.text, {
+          parse_mode: "Markdown",
+          link_preview_options: { is_disabled: true },
+          reply_parameters: { message_id: ctx.message!.message_id },
+        });
+      } else {
+        await ctx.reply(result.text, {
+          parse_mode: "Markdown",
+          reply_markup: result.keyboard,
+          reply_parameters: { message_id: ctx.message!.message_id },
+        });
+      }
+    } else {
+      // Implicit suggestion: show Create/Dismiss buttons
       const suggestionId = storeSuggestion({
         title: detection.title,
-        listPublicId: target.listPublicId,
-        boardName: target.boardName,
-        listName: target.listName,
+        workspacePublicId,
         memberPublicIds,
-        assigneeNames,
+        assigneeNames: memberNames,
         chatId,
       });
 
-      let suggestionText = `Detected a task:\n\n*${detection.title}*\n→ ${target.boardName} / ${target.listName}`;
-      if (assigneeNames.length > 0) {
-        suggestionText += `\nAssign to: ${assigneeNames.join(", ")}`;
+      let suggestionText = `Detected a task:\n\n*${detection.title}*`;
+      if (memberNames.length > 0) {
+        suggestionText += `\nAssign to: ${memberNames.join(", ")}`;
       }
 
       const keyboard = new InlineKeyboard()
@@ -114,6 +205,5 @@ export async function messageListener(ctx: Context) {
     }
   } catch (error) {
     console.error("Error in message listener:", error);
-    // Silently fail - don't disrupt chat with error messages
   }
 }
