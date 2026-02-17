@@ -56,6 +56,16 @@ sqlite.exec(`
     initiated_by_user_id INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS default_board_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL UNIQUE,
+    board_public_id TEXT NOT NULL,
+    list_public_id TEXT NOT NULL,
+    board_name TEXT NOT NULL,
+    list_name TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
   CREATE TABLE IF NOT EXISTS telegram_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_public_id TEXT NOT NULL,

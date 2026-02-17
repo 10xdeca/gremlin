@@ -11,6 +11,7 @@ export async function helpCommand(ctx: Context) {
 \`/start <workspace>\` - Link this chat to a Kan workspace
 \`/map @user email\` - Map a Telegram user to their Kan email (DM only)
 \`/settopic\` - Set reminders to post in this topic
+\`/setdefault\` - Set default board/list for new tasks
 \`/unlink\` - Unlink this chat from its workspace
 
 *User Commands:*
@@ -18,6 +19,7 @@ export async function helpCommand(ctx: Context) {
 \`/unlinkme\` - Remove your account mapping
 
 *Task Commands:*
+\`/newtask <title> [@user ...]\` - Create a new task
 \`/mytasks\` - View your assigned tasks
 \`/overdue\` - View all overdue tasks in the workspace
 \`/done <task-id>\` - Mark a task as complete
@@ -27,8 +29,9 @@ export async function helpCommand(ctx: Context) {
 \`/namingceremony\` - Start a bot naming ceremony (admin)
 \`/concludeceremony\` - End the naming ceremony early (admin)
 
-*Automatic Reminders:*
-• Overdue tasks - daily
+*Automatic Features:*
+• Task detection - detects task-like messages and offers to create cards
+• Overdue task reminders - daily
 • Stale tasks (in progress >14 days) - every 2 days
 • Unassigned tasks - every 2 days
 • Sprint start (days 1-2): vague tasks, missing due dates, people with no tasks
