@@ -15,6 +15,10 @@ import { doneCommand } from "./bot/commands/done.js";
 import { commentCommand } from "./bot/commands/comment.js";
 import { helpCommand } from "./bot/commands/help.js";
 import { namingCeremonyCommand, concludeCeremonyCommand } from "./bot/commands/namingceremony.js";
+import { newtaskCommand } from "./bot/commands/newtask.js";
+import { setdefaultCommand, handleSetDefaultBoardCallback, handleSetDefaultListCallback } from "./bot/commands/setdefault.js";
+import { handleTaskCreateCallback, handleTaskDismissCallback } from "./bot/callbacks/task-suggestion.js";
+import { messageListener } from "./bot/handlers/message-listener.js";
 
 // Import scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -51,6 +55,17 @@ bot.command("comment", commentCommand);
 bot.command("help", helpCommand);
 bot.command("namingceremony", namingCeremonyCommand);
 bot.command("concludeceremony", concludeCeremonyCommand);
+bot.command("newtask", newtaskCommand);
+bot.command("setdefault", setdefaultCommand);
+
+// Register callback query handlers
+bot.callbackQuery(/^sd:b:/, handleSetDefaultBoardCallback);
+bot.callbackQuery(/^sd:l:/, handleSetDefaultListCallback);
+bot.callbackQuery(/^task:create:/, handleTaskCreateCallback);
+bot.callbackQuery(/^task:dismiss:/, handleTaskDismissCallback);
+
+// Register message listener for task detection (AFTER all commands)
+bot.on("message:text", messageListener);
 
 // Handle errors
 bot.catch((err) => {
@@ -74,6 +89,8 @@ async function main() {
     { command: "overdue", description: "View all overdue tasks" },
     { command: "done", description: "Mark a task as complete" },
     { command: "comment", description: "Add a comment to a task" },
+    { command: "newtask", description: "Create a new task" },
+    { command: "setdefault", description: "Set default board/list for new tasks (admin)" },
     { command: "help", description: "Show available commands" },
     { command: "namingceremony", description: "Start a bot naming ceremony (admin)" },
     { command: "concludeceremony", description: "End the naming ceremony early (admin)" },

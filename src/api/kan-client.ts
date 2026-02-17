@@ -154,6 +154,21 @@ class KanApiClient {
   }
 
   // Cards
+  async createCard(
+    listPublicId: string,
+    data: {
+      title: string;
+      description?: string;
+      memberPublicIds?: string[];
+    }
+  ): Promise<KanCard> {
+    return this.request("POST", `/lists/${listPublicId}/cards`, {
+      title: data.title,
+      ...(data.description && { description: data.description }),
+      ...(data.memberPublicIds?.length && { memberPublicIds: data.memberPublicIds }),
+    });
+  }
+
   async getCard(cardPublicId: string): Promise<KanCard> {
     return this.request("GET", `/cards/${cardPublicId}`);
   }
@@ -168,6 +183,13 @@ class KanApiClient {
     }
   ): Promise<KanCard> {
     return this.request("PUT", `/cards/${cardPublicId}`, data);
+  }
+
+  async toggleCardMember(
+    cardPublicId: string,
+    memberPublicId: string
+  ): Promise<void> {
+    await this.request("POST", `/cards/${cardPublicId}/members/${memberPublicId}/toggle`);
   }
 
   async addComment(cardPublicId: string, comment: string): Promise<KanComment> {
@@ -261,6 +283,22 @@ class KanApiClient {
     }
 
     return memberCards;
+  }
+
+  // Find "Backlog" or "To Do" list in a board (for new card placement)
+  async findBacklogOrTodoList(boardPublicId: string): Promise<KanList | null> {
+    const board = await this.getBoard(boardPublicId);
+    const lists = board.lists || [];
+
+    // Prefer "Backlog", then "To Do" / "Todo", then fall back to first list
+    for (const list of lists) {
+      if (list.name.toLowerCase() === "backlog") return list;
+    }
+    for (const list of lists) {
+      const lower = list.name.toLowerCase();
+      if (lower === "to do" || lower === "todo") return list;
+    }
+    return lists[0] || null;
   }
 
   // Find "Done" list in a board
