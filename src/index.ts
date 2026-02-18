@@ -8,6 +8,7 @@ import "./db/client.js";
 // Agent infrastructure
 import { mcpManager } from "./agent/mcp-manager.js";
 import { runAgentLoop } from "./agent/agent-loop.js";
+import { getWorkspaceLink } from "./db/queries.js";
 
 // Custom tool registration
 import { registerChatConfigTools } from "./tools/chat-config.js";
@@ -57,6 +58,20 @@ const GROUP_COOLDOWN_MS = 30_000; // 30s cooldown per chat for non-targeted mess
 const lastAgentCall = new Map<number, number>();
 
 let botUsername: string | undefined;
+
+// Cache configured topic thread IDs per chat (avoids DB lookup on every message)
+const topicCache = new Map<number, { threadId: number | null; expiresAt: number }>();
+const TOPIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getConfiguredTopicId(chatId: number): Promise<number | null> {
+  const cached = topicCache.get(chatId);
+  if (cached && Date.now() < cached.expiresAt) return cached.threadId;
+
+  const link = await getWorkspaceLink(chatId);
+  const threadId = link?.messageThreadId ?? null;
+  topicCache.set(chatId, { threadId, expiresAt: Date.now() + TOPIC_CACHE_TTL_MS });
+  return threadId;
+}
 
 /**
  * Decide whether to skip a message to avoid unnecessary LLM calls.
@@ -108,6 +123,12 @@ bot.on("message:text", async (ctx) => {
     ctx.message?.reply_to_message?.from?.id,
     ctx.me?.id
   )) return;
+
+  // In groups with a configured topic, only process messages from that topic
+  if (ctx.chat.type !== "private") {
+    const configuredTopic = await getConfiguredTopicId(chatId);
+    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) return;
+  }
 
   // Track last agent call for cooldown
   if (ctx.chat.type !== "private") {
