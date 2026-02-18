@@ -5,9 +5,11 @@ import {
   getActiveStandupSession,
   upsertStandupResponse,
   getStandupResponses,
+  getAllUserLinks,
+  getWorkspaceLink,
 } from "../db/queries.js";
 import { getTodayInTimezone } from "../utils/timezone.js";
-import { getAllUserLinks } from "../db/queries.js";
+import { mcpManager } from "../agent/mcp-manager.js";
 
 /** Register standup management tools. */
 export function registerStandupTools(): void {
@@ -158,7 +160,6 @@ export function registerStandupTools(): void {
       }
 
       const responses = await getStandupResponses(session.id);
-      const userLinks = await getAllUserLinks();
       const respondedUserIds = new Set(responses.map((r) => r.telegramUserId));
 
       const responded = responses.map((r) => ({
@@ -169,7 +170,10 @@ export function registerStandupTools(): void {
         blockers: r.blockers,
       }));
 
-      const missing = userLinks
+      // Scope "missing" list to workspace members
+      const wsLink = await getWorkspaceLink(chatId);
+      const workspaceUsernames = await getWorkspaceScopedUserLinks(wsLink?.workspacePublicId);
+      const missing = workspaceUsernames
         .filter((u) => !respondedUserIds.has(u.telegramUserId))
         .map((u) => ({
           userId: u.telegramUserId,
@@ -185,4 +189,25 @@ export function registerStandupTools(): void {
       });
     },
   });
+}
+
+/** Get user links scoped to a workspace's active members. */
+async function getWorkspaceScopedUserLinks(workspacePublicId: string | undefined) {
+  if (!workspacePublicId) return [];
+
+  try {
+    const data = JSON.parse(
+      await mcpManager.callTool("kan_get_workspace", { workspace_id: workspacePublicId })
+    ) as { members?: Array<{ email: string; status: string }> };
+    const activeEmails = new Set(
+      (data.members || []).filter((m) => m.status === "active").map((m) => m.email.toLowerCase())
+    );
+
+    const userLinks = await getAllUserLinks();
+    return userLinks.filter(
+      (u) => u.telegramUsername && activeEmails.has(u.kanUserEmail.toLowerCase())
+    );
+  } catch {
+    return [];
+  }
 }

@@ -16,6 +16,15 @@ import {
 } from "../utils/timezone.js";
 import { isBreakDay } from "../utils/sprint.js";
 import { formatStandupSummary } from "../services/standup-summarizer.js";
+import { mcpManager } from "../agent/mcp-manager.js";
+
+interface KanWorkspaceMember {
+  publicId: string;
+  email: string;
+  role: string;
+  status: string;
+  user: { name: string | null } | null;
+}
 
 /**
  * Start the standup scheduler. Runs every 5 minutes, checks each configured
@@ -73,7 +82,8 @@ async function processStandupConfig(bot: Bot, config: StandupConfig): Promise<vo
   }
 
   // Summary check: right hour + active session → summarize
-  if (currentHour === config.summaryHour) {
+  // Guard: don't summarize in the same hour as the prompt (no responses yet)
+  if (currentHour === config.summaryHour && config.summaryHour !== config.promptHour) {
     const session = await getActiveStandupSession(telegramChatId, today);
     if (session && session.status === "active") {
       await sendStandupSummary(bot, config, session);
@@ -88,16 +98,12 @@ async function sendStandupPrompt(
 ): Promise<void> {
   const { telegramChatId } = config;
 
-  // Get workspace link for thread ID
+  // Get workspace link for thread ID and workspace scoping
   const wsLink = await getWorkspaceLink(telegramChatId);
   const messageThreadId = wsLink?.messageThreadId ?? undefined;
 
-  // Get all mapped users for @mentions
-  const userLinks = await getAllUserLinks();
-  const mentions = userLinks
-    .filter((u) => u.telegramUsername)
-    .map((u) => `@${u.telegramUsername}`)
-    .join(" ");
+  // Scope @mentions to this workspace's members (not all user links globally)
+  const { mentions, expectedUsernames: _ } = await getWorkspaceUsernames(wsLink?.workspacePublicId);
 
   const message =
     `*Daily Standup* — ${escapeMarkdown(today)}\n\n` +
@@ -142,12 +148,9 @@ async function sendStandupSummary(
   const wsLink = await getWorkspaceLink(telegramChatId);
   const messageThreadId = wsLink?.messageThreadId ?? undefined;
 
-  // Gather responses and expected users
+  // Gather responses and expected users (scoped to this workspace)
   const responses = await getStandupResponses(session.id);
-  const userLinks = await getAllUserLinks();
-  const expectedUsernames = userLinks
-    .filter((u) => u.telegramUsername)
-    .map((u) => u.telegramUsername!);
+  const { expectedUsernames } = await getWorkspaceUsernames(wsLink?.workspacePublicId);
 
   const summary = formatStandupSummary({
     date: session.date,
@@ -180,6 +183,43 @@ async function sendStandupSummary(
     console.log(`Sent standup summary for chat ${telegramChatId} (${session.date})`);
   } catch (error) {
     console.error(`Failed to send standup summary for chat ${telegramChatId}:`, error);
+  }
+}
+
+/**
+ * Fetch workspace members via MCP and cross-reference with user links
+ * to get Telegram usernames scoped to a specific workspace.
+ */
+async function getWorkspaceUsernames(workspacePublicId: string | undefined): Promise<{
+  mentions: string;
+  expectedUsernames: string[];
+}> {
+  if (!workspacePublicId) {
+    return { mentions: "", expectedUsernames: [] };
+  }
+
+  try {
+    const data = JSON.parse(
+      await mcpManager.callTool("kan_get_workspace", { workspace_id: workspacePublicId })
+    ) as { members?: KanWorkspaceMember[] };
+    const members = data.members || [];
+    const activeEmails = new Set(
+      members.filter((m) => m.status === "active").map((m) => m.email.toLowerCase())
+    );
+
+    const userLinks = await getAllUserLinks();
+    const workspaceUsers = userLinks.filter(
+      (u) => u.telegramUsername && activeEmails.has(u.kanUserEmail.toLowerCase())
+    );
+
+    const usernames = workspaceUsers.map((u) => u.telegramUsername!);
+    return {
+      mentions: usernames.map((u) => `@${u}`).join(" "),
+      expectedUsernames: usernames,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch workspace members for ${workspacePublicId}:`, error);
+    return { mentions: "", expectedUsernames: [] };
   }
 }
 

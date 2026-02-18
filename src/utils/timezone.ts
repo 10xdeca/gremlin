@@ -20,11 +20,9 @@ export function getCurrentHourInTimezone(timezone: string, now: Date = new Date(
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     hour: "numeric",
-    hour12: false,
+    hourCycle: "h23",
   });
-  // Returns "0" through "23" (or "24" for midnight in some locales, which we map to 0)
-  const hour = parseInt(formatter.format(now), 10);
-  return hour === 24 ? 0 : hour;
+  return parseInt(formatter.format(now), 10);
 }
 
 /** Returns true if the current day in the given timezone is Saturday (6) or Sunday (0). */
