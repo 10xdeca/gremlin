@@ -66,6 +66,14 @@ sqlite.exec(`
     updated_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
 
+  CREATE TABLE IF NOT EXISTS oauth_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_type TEXT NOT NULL UNIQUE,
+    token_value TEXT NOT NULL,
+    expires_at INTEGER,
+    updated_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS telegram_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_public_id TEXT NOT NULL,

@@ -1,11 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { Api } from "grammy";
 import { getAnthropicTools, executeTool } from "./tool-registry.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { getHistory, appendToHistory } from "./conversation-history.js";
+import { getAnthropicClient } from "../services/anthropic-client.js";
 
-const anthropic = new Anthropic();
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOOL_ROUNDS = 10;
 const MAX_TOKENS = 2048;
 
@@ -28,6 +28,7 @@ export async function runAgentLoop(
   api: Api,
   input: AgentInput
 ): Promise<string> {
+  const anthropic = await getAnthropicClient();
   const tools = getAnthropicTools();
   const systemPrompt = await buildSystemPrompt({
     chatId: input.chatId,

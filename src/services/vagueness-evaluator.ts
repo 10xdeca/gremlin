@@ -1,6 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic();
+import { getAnthropicClient } from "./anthropic-client.js";
 
 interface TaskInfo {
   title: string;
@@ -30,8 +28,9 @@ export async function evaluateTaskVagueness(task: TaskInfo): Promise<VaguenessRe
   }
 
   try {
+    const anthropic = await getAnthropicClient();
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 150,
       messages: [
         {

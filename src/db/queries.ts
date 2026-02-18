@@ -215,6 +215,39 @@ export async function cleanOldReminders(olderThanDays: number = 7) {
     .run();
 }
 
+// OAuth Tokens
+export async function getOAuthToken(tokenType: string): Promise<string | null> {
+  const results = db
+    .select()
+    .from(schema.oauthTokens)
+    .where(eq(schema.oauthTokens.tokenType, tokenType))
+    .all();
+  return results[0]?.tokenValue ?? null;
+}
+
+export async function saveOAuthToken(
+  tokenType: string,
+  tokenValue: string,
+  expiresAt?: number
+): Promise<void> {
+  db.insert(schema.oauthTokens)
+    .values({
+      tokenType,
+      tokenValue,
+      expiresAt: expiresAt ?? null,
+      updatedAt: Date.now(),
+    })
+    .onConflictDoUpdate({
+      target: schema.oauthTokens.tokenType,
+      set: {
+        tokenValue,
+        expiresAt: expiresAt ?? null,
+        updatedAt: Date.now(),
+      },
+    })
+    .run();
+}
+
 // Bot Identity
 export async function getBotIdentityFromDb() {
   const results = db

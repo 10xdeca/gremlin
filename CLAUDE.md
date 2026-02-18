@@ -43,6 +43,7 @@ Telegram Message → Grammy → Agent Loop (Claude Haiku + tools) → Response �
 ## Deployment
 
 This is the source code only. Deployment config is in `xdeca-infra/xdeca-pm-bot/`:
+
 - `docker-compose.yml` builds from this source (rsynced from `xdeca-pm-bot/` to `xdeca-pm-bot/src/` on server)
 - Secrets in `secrets.yaml` (SOPS-encrypted)
 - Deploy: `./scripts/deploy-to.sh 34.116.110.7 xdeca-pm-bot` from xdeca-infra repo
@@ -62,6 +63,7 @@ This is the source code only. Deployment config is in `xdeca-infra/xdeca-pm-bot/
 ## Environment Variables
 
 See `.env.example` for all required and optional variables. Key additions for the MCP-based architecture:
+
 - `KAN_API_KEY` — Kan API key (replaces old `KAN_SERVICE_API_KEY`)
 - `OUTLINE_API_KEY` — Outline wiki API key
 - `OUTLINE_BASE_URL` — Outline API base URL
