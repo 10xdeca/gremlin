@@ -5,7 +5,7 @@ import { buildSystemPrompt } from "./system-prompt.js";
 import { getHistory, appendToHistory } from "./conversation-history.js";
 import { getAnthropicClient } from "../services/anthropic-client.js";
 
-const MODEL = "claude-sonnet-4-5-20250929";
+const MODEL = "claude-sonnet-4-6-20250514";
 const MAX_TOOL_ROUNDS = 10;
 const MAX_TOKENS = 2048;
 
