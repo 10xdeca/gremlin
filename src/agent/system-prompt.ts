@@ -33,7 +33,8 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   // Context
   parts.push("## Current Context");
   parts.push(`- Requesting user: @${ctx.username || "unknown"} (user ID: ${ctx.userId}) — ${ctx.isAdmin ? "ADMIN" : "member"}`);
-  parts.push(`- Sprint day: ${sprint.day}/14${sprint.isPlanningWindow ? " (PLANNING WINDOW — days 1-2)" : ""}${sprint.isBreak ? " (break day)" : ""}`);
+  parts.push(`- Sprint day: ${sprint.day}/14${sprint.isPlanningWindow ? " (PLANNING WINDOW)" : ""}${sprint.isMidSprint ? " (MID-SPRINT)" : ""}${sprint.isSprintEnd ? " (RETRO DAY)" : ""}${sprint.isBreak ? " (BREAK DAY)" : ""}`);
+  parts.push(`- Sprint ceremonies (all times AEST/GMT+10): Sprint opening Sun 10am (day 1), Mid-sprint touch point Sun 10am (day 8), Retro Fri 6pm (day 13)`);
   parts.push("");
 
   // Reply context

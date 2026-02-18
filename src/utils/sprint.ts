@@ -49,10 +49,10 @@ export function isSprintPlanningWindow(now: Date = new Date()): boolean {
 }
 
 /**
- * Check if it's the mid-sprint day (Saturday, day 7)
+ * Check if it's the mid-sprint day (Sunday, day 8)
  */
 export function isMidSprintDay(now: Date = new Date()): boolean {
-  return getSprintDay(now) === 7;
+  return getSprintDay(now) === 8;
 }
 
 /**
@@ -83,7 +83,7 @@ export function getSprintInfo(now: Date = new Date()): {
   return {
     day,
     isPlanningWindow: day <= 2,
-    isMidSprint: day === 7,
+    isMidSprint: day === 8,
     isSprintEnd: day === 13,
     isBreak: day === 14,
   };
