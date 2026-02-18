@@ -22,7 +22,7 @@ describe("sprint utilities", () => {
       expect(getSprintDay(new Date("2025-01-06T12:00:00Z"))).toBe(2);
     });
 
-    it("returns 7 on mid-sprint Saturday", () => {
+    it("returns 7 on Saturday", () => {
       expect(getSprintDay(new Date("2025-01-11T12:00:00Z"))).toBe(7);
     });
 

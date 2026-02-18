@@ -22,7 +22,8 @@ function getSprintEpoch(): Date {
  * Get the current day of the sprint (1-14)
  * Day 1 = Sunday (sprint start)
  * Day 2 = Monday
- * Day 7 = Saturday (mid-sprint)
+ * Day 7 = Saturday
+ * Day 8 = Sunday (mid-sprint)
  * Day 13 = Friday (sprint end)
  * Day 14 = Saturday (break day)
  */
