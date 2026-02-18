@@ -82,10 +82,12 @@ async function processStandupConfig(bot: Bot, config: StandupConfig): Promise<vo
   }
 
   // Nudge check: right hour + active session + not yet nudged → DM non-responders
+  // Guard: skip if nudgeHour collides with promptHour (no responses yet) or summaryHour (wasted nudge)
   if (
     config.nudgeHour != null &&
     currentHour === config.nudgeHour &&
-    config.nudgeHour !== config.promptHour
+    config.nudgeHour !== config.promptHour &&
+    config.nudgeHour !== config.summaryHour
   ) {
     const session = await getActiveStandupSession(telegramChatId, today);
     if (session && session.status === "active" && !session.nudgedAt) {
@@ -238,8 +240,8 @@ async function sendStandupNudges(
       nudgedCount++;
     } catch (error: unknown) {
       // 403 = user hasn't started a chat with the bot, skip silently
-      const status = (error as { status?: number })?.status;
-      if (status === 403) {
+      const errorCode = (error as { error_code?: number })?.error_code;
+      if (errorCode === 403) {
         console.log(
           `Nudge skipped for user ${user.telegramUserId} (@${user.telegramUsername}) — no DM chat`
         );
