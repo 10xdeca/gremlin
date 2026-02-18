@@ -1,5 +1,7 @@
 import { getBotIdentity } from "../services/bot-identity.js";
 import { getSprintInfo } from "../utils/sprint.js";
+import { getStandupConfig, getActiveStandupSession } from "../db/queries.js";
+import { getTodayInTimezone } from "../utils/timezone.js";
 
 interface MessageContext {
   chatId: number;
@@ -42,6 +44,23 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push(`User is replying to a message${ctx.replyToUsername ? ` from @${ctx.replyToUsername}` : ""}:`);
     parts.push(`> ${ctx.replyToText.slice(0, 500)}`);
     parts.push("");
+  }
+
+  // Active standup context
+  const standupConfig = await getStandupConfig(ctx.chatId);
+  if (standupConfig?.enabled) {
+    const today = getTodayInTimezone(standupConfig.timezone);
+    const activeSession = await getActiveStandupSession(ctx.chatId, today);
+    if (activeSession && activeSession.status === "active") {
+      parts.push("## Active Standup");
+      parts.push(`There is an active standup for today (${today}).`);
+      parts.push(
+        "When a user shares what they worked on, what they're doing next, or mentions blockers, " +
+        "use the `save_standup_response` tool to record it. Parse their natural language into " +
+        "yesterday/today/blockers fields. After saving, briefly acknowledge their update."
+      );
+      parts.push("");
+    }
   }
 
   // Capabilities and guidelines

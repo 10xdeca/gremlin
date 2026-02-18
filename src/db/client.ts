@@ -74,6 +74,39 @@ sqlite.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS standup_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL UNIQUE,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    prompt_hour INTEGER NOT NULL DEFAULT 9,
+    summary_hour INTEGER NOT NULL DEFAULT 17,
+    timezone TEXT NOT NULL DEFAULT 'Australia/Sydney',
+    skip_break_days INTEGER NOT NULL DEFAULT 1,
+    skip_weekends INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE IF NOT EXISTS standup_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    prompt_message_id INTEGER,
+    summary_message_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active',
+    UNIQUE(telegram_chat_id, date)
+  );
+
+  CREATE TABLE IF NOT EXISTS standup_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    telegram_user_id INTEGER NOT NULL,
+    telegram_username TEXT,
+    yesterday TEXT,
+    today TEXT,
+    blockers TEXT,
+    raw_message TEXT,
+    UNIQUE(session_id, telegram_user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS telegram_reminders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     card_public_id TEXT NOT NULL,

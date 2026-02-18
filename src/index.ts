@@ -14,9 +14,11 @@ import { registerChatConfigTools } from "./tools/chat-config.js";
 import { registerUserMappingTools } from "./tools/user-mapping.js";
 import { registerSprintInfoTools } from "./tools/sprint-info.js";
 import { registerBotIdentityTools } from "./tools/bot-identity.js";
+import { registerStandupTools } from "./tools/standup.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
+import { startStandupChecker } from "./scheduler/standup-checker.js";
 
 // Admin check
 const ADMIN_USER_IDS: Set<number> = new Set(
@@ -154,6 +156,7 @@ async function main() {
   registerUserMappingTools();
   registerSprintInfoTools();
   registerBotIdentityTools();
+  registerStandupTools();
 
   // Initialize MCP servers
   await mcpManager.init();
@@ -168,6 +171,9 @@ async function main() {
 
   // Start the task checker (overdue, vague, stale, unassigned, no due date)
   startTaskChecker(bot);
+
+  // Start the standup checker (daily prompts and summaries)
+  startStandupChecker(bot);
 
   // Start polling
   console.log("Starting polling...");
