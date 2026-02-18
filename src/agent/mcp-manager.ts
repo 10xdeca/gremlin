@@ -100,7 +100,7 @@ class McpManager {
   }
 
   private getServerConfigs(): McpServerConfig[] {
-    const mcpRoot = resolve(__dirname, "../../mcp-servers");
+    const mcpRoot = resolve(__dirname, "../../mcp-servers/packages");
     const configs: McpServerConfig[] = [];
 
     // Kan MCP server

@@ -1,0 +1,3 @@
+[submodule "mcp-servers"]
+	path = mcp-servers
+	url = git@github.com:10xdeca/mcp-servers.git
