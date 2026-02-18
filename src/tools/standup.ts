@@ -60,6 +60,11 @@ export function registerStandupTools(): void {
           type: "boolean",
           description: "Skip standups on weekends",
         },
+        nudge_hour: {
+          type: ["number", "null"],
+          description:
+            "Hour (0-23) to DM users who haven't responded, or null to disable nudges",
+        },
       },
       required: ["chat_id"],
     },
@@ -72,6 +77,7 @@ export function registerStandupTools(): void {
         ...(args.timezone !== undefined ? { timezone: args.timezone as string } : {}),
         ...(args.skip_break_days !== undefined ? { skipBreakDays: args.skip_break_days as boolean } : {}),
         ...(args.skip_weekends !== undefined ? { skipWeekends: args.skip_weekends as boolean } : {}),
+        ...(args.nudge_hour !== undefined ? { nudgeHour: args.nudge_hour as number | null } : {}),
       });
       const updated = await getStandupConfig(args.chat_id as number);
       return JSON.stringify({ success: true, config: updated });

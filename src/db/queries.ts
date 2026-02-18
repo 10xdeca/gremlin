@@ -339,6 +339,7 @@ export async function upsertStandupConfig(data: {
   timezone?: string;
   skipBreakDays?: boolean;
   skipWeekends?: boolean;
+  nudgeHour?: number | null;
 }) {
   return db
     .insert(schema.standupConfig)
@@ -350,6 +351,7 @@ export async function upsertStandupConfig(data: {
       timezone: data.timezone ?? "Australia/Sydney",
       skipBreakDays: data.skipBreakDays ?? true,
       skipWeekends: data.skipWeekends ?? true,
+      nudgeHour: data.nudgeHour ?? null,
     })
     .onConflictDoUpdate({
       target: schema.standupConfig.telegramChatId,
@@ -360,6 +362,7 @@ export async function upsertStandupConfig(data: {
         ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
         ...(data.skipBreakDays !== undefined ? { skipBreakDays: data.skipBreakDays } : {}),
         ...(data.skipWeekends !== undefined ? { skipWeekends: data.skipWeekends } : {}),
+        ...(data.nudgeHour !== undefined ? { nudgeHour: data.nudgeHour } : {}),
       },
     })
     .run();
@@ -408,6 +411,7 @@ export async function updateStandupSession(
     promptMessageId: number | null;
     summaryMessageId: number | null;
     status: string;
+    nudgedAt: number | null;
   }>
 ) {
   return db

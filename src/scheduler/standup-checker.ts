@@ -81,6 +81,20 @@ async function processStandupConfig(bot: Bot, config: StandupConfig): Promise<vo
     }
   }
 
+  // Nudge check: right hour + active session + not yet nudged → DM non-responders
+  // Guard: skip if nudgeHour collides with promptHour (no responses yet) or summaryHour (wasted nudge)
+  if (
+    config.nudgeHour != null &&
+    currentHour === config.nudgeHour &&
+    config.nudgeHour !== config.promptHour &&
+    config.nudgeHour !== config.summaryHour
+  ) {
+    const session = await getActiveStandupSession(telegramChatId, today);
+    if (session && session.status === "active" && !session.nudgedAt) {
+      await sendStandupNudges(bot, config, session);
+    }
+  }
+
   // Summary check: right hour + active session → summarize
   // Guard: don't summarize in the same hour as the prompt (no responses yet)
   if (currentHour === config.summaryHour && config.summaryHour !== config.promptHour) {
@@ -186,6 +200,69 @@ async function sendStandupSummary(
   }
 }
 
+async function sendStandupNudges(
+  bot: Bot,
+  config: StandupConfig,
+  session: StandupSession
+): Promise<void> {
+  const { telegramChatId } = config;
+
+  const wsLink = await getWorkspaceLink(telegramChatId);
+  const { userLinks } = await getWorkspaceUsernames(wsLink?.workspacePublicId);
+
+  const responses = await getStandupResponses(session.id);
+  const respondedUserIds = new Set(responses.map((r) => r.telegramUserId));
+
+  const missing = userLinks.filter((u) => !respondedUserIds.has(u.telegramUserId));
+
+  if (missing.length === 0) {
+    // Everyone responded — mark nudged so we don't re-check
+    await updateStandupSession(session.id, { nudgedAt: Date.now() });
+    return;
+  }
+
+  // Build a display name for the group chat
+  const chatName = wsLink?.workspaceName
+    ? escapeMarkdown(wsLink.workspaceName)
+    : "the group chat";
+
+  const nudgeMessage =
+    `Standup reminder — you haven\\'t posted your update yet today\\.\n\n` +
+    `Reply in ${chatName} with what you\\'re working on\\!`;
+
+  let nudgedCount = 0;
+  for (const user of missing) {
+    try {
+      await bot.api.sendMessage(user.telegramUserId, nudgeMessage, {
+        parse_mode: "MarkdownV2",
+        link_preview_options: { is_disabled: true },
+      });
+      nudgedCount++;
+    } catch (error: unknown) {
+      // 403 = user hasn't started a chat with the bot, skip silently
+      const errorCode = (error as { error_code?: number })?.error_code;
+      if (errorCode === 403) {
+        console.log(
+          `Nudge skipped for user ${user.telegramUserId} (@${user.telegramUsername}) — no DM chat`
+        );
+      } else {
+        console.error(
+          `Failed to nudge user ${user.telegramUserId} (@${user.telegramUsername}):`,
+          error
+        );
+      }
+    }
+  }
+
+  await updateStandupSession(session.id, { nudgedAt: Date.now() });
+  console.log(
+    `Sent standup nudges for chat ${telegramChatId} (${session.date}): ` +
+      `${nudgedCount}/${missing.length} DMs sent`
+  );
+}
+
+type UserLink = Awaited<ReturnType<typeof getAllUserLinks>>[number];
+
 /**
  * Fetch workspace members via MCP and cross-reference with user links
  * to get Telegram usernames scoped to a specific workspace.
@@ -193,9 +270,10 @@ async function sendStandupSummary(
 async function getWorkspaceUsernames(workspacePublicId: string | undefined): Promise<{
   mentions: string;
   expectedUsernames: string[];
+  userLinks: UserLink[];
 }> {
   if (!workspacePublicId) {
-    return { mentions: "", expectedUsernames: [] };
+    return { mentions: "", expectedUsernames: [], userLinks: [] };
   }
 
   try {
@@ -207,8 +285,8 @@ async function getWorkspaceUsernames(workspacePublicId: string | undefined): Pro
       members.filter((m) => m.status === "active").map((m) => m.email.toLowerCase())
     );
 
-    const userLinks = await getAllUserLinks();
-    const workspaceUsers = userLinks.filter(
+    const allLinks = await getAllUserLinks();
+    const workspaceUsers = allLinks.filter(
       (u) => u.telegramUsername && activeEmails.has(u.kanUserEmail.toLowerCase())
     );
 
@@ -216,10 +294,11 @@ async function getWorkspaceUsernames(workspacePublicId: string | undefined): Pro
     return {
       mentions: usernames.map((u) => `@${u}`).join(" "),
       expectedUsernames: usernames,
+      userLinks: workspaceUsers,
     };
   } catch (error) {
     console.error(`Failed to fetch workspace members for ${workspacePublicId}:`, error);
-    return { mentions: "", expectedUsernames: [] };
+    return { mentions: "", expectedUsernames: [], userLinks: [] };
   }
 }
 

@@ -208,4 +208,20 @@ try {
   // Column already exists, ignore
 }
 
+// Migration: Add nudge_hour column to standup_config
+try {
+  sqlite.exec(`ALTER TABLE standup_config ADD COLUMN nudge_hour INTEGER`);
+  console.log("Migration: Added nudge_hour column to standup_config");
+} catch {
+  // Column already exists, ignore
+}
+
+// Migration: Add nudged_at column to standup_sessions
+try {
+  sqlite.exec(`ALTER TABLE standup_sessions ADD COLUMN nudged_at INTEGER`);
+  console.log("Migration: Added nudged_at column to standup_sessions");
+} catch {
+  // Column already exists, ignore
+}
+
 export { schema };

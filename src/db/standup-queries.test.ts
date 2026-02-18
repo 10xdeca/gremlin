@@ -15,7 +15,8 @@ function createTestDb() {
       summary_hour INTEGER NOT NULL DEFAULT 17,
       timezone TEXT NOT NULL DEFAULT 'Australia/Sydney',
       skip_break_days INTEGER NOT NULL DEFAULT 1,
-      skip_weekends INTEGER NOT NULL DEFAULT 1
+      skip_weekends INTEGER NOT NULL DEFAULT 1,
+      nudge_hour INTEGER
     );
 
     CREATE TABLE standup_sessions (
@@ -25,6 +26,7 @@ function createTestDb() {
       prompt_message_id INTEGER,
       summary_message_id INTEGER,
       status TEXT NOT NULL DEFAULT 'active',
+      nudged_at INTEGER,
       UNIQUE(telegram_chat_id, date)
     );
 
