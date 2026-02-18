@@ -60,7 +60,7 @@ export async function getAnthropicClient(): Promise<Anthropic> {
   tokenExpiresAt = Date.now() + data.expires_in * 1000;
   currentRefreshToken = data.refresh_token;
 
-  // Persist the new single-use refresh token to DB
+  // Persist the new single-use refresh token to DB (expiresAt tracks access token expiry for cache invalidation)
   try {
     await saveOAuthToken("claude_refresh", data.refresh_token, tokenExpiresAt);
   } catch (e) {

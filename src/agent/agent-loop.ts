@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { Api } from "grammy";
 import { getAnthropicTools, executeTool } from "./tool-registry.js";
 import { buildSystemPrompt } from "./system-prompt.js";
