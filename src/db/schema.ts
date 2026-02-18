@@ -58,6 +58,15 @@ export const defaultBoardConfig = sqliteTable("default_board_config", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+// Persists OAuth tokens (e.g. Claude refresh tokens) across restarts
+export const oauthTokens = sqliteTable("oauth_tokens", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tokenType: text("token_type").notNull().unique(),
+  tokenValue: text("token_value").notNull(),
+  expiresAt: integer("expires_at"), // epoch ms, nullable
+  updatedAt: integer("updated_at").notNull(),
+});
+
 // Tracks active/completed naming ceremonies
 export const namingCeremonies = sqliteTable("naming_ceremonies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
