@@ -77,6 +77,7 @@ export const standupConfig = sqliteTable("standup_config", {
   timezone: text("timezone").notNull().$defaultFn(() => "Australia/Sydney"),
   skipBreakDays: integer("skip_break_days", { mode: "boolean" }).notNull().$defaultFn(() => true),
   skipWeekends: integer("skip_weekends", { mode: "boolean" }).notNull().$defaultFn(() => true),
+  nudgeHour: integer("nudge_hour"), // 0-23, nullable. If null, no nudges sent.
 });
 
 // One row per chat per day for standup sessions
@@ -87,6 +88,7 @@ export const standupSessions = sqliteTable("standup_sessions", {
   promptMessageId: integer("prompt_message_id"),
   summaryMessageId: integer("summary_message_id"),
   status: text("status").notNull().$defaultFn(() => "active"), // active | summarized | skipped
+  nudgedAt: integer("nudged_at"), // epoch ms timestamp when DM nudges were sent
 }, (t) => [
   unique().on(t.telegramChatId, t.date),
 ]);
