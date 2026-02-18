@@ -125,5 +125,5 @@ src/
     sprint.ts                     # Sprint date calculations
     mentions.ts                   # @mention parsing
     timezone.ts                   # Timezone-aware date helpers
-  mcp-servers/                    # Bundled MCP server source (git submodule)
+mcp-servers/                      # Bundled MCP server source (git submodule)
 ```
