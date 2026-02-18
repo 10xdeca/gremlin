@@ -12,11 +12,11 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 # Install MCP server dependencies
-COPY mcp-servers/kan/package.json mcp-servers/kan/
-RUN cd mcp-servers/kan && npm install
+COPY mcp-servers/packages/kan/package.json mcp-servers/packages/kan/
+RUN cd mcp-servers/packages/kan && npm install
 
-COPY mcp-servers/outline/package.json mcp-servers/outline/
-RUN cd mcp-servers/outline && npm install
+COPY mcp-servers/packages/outline/package.json mcp-servers/packages/outline/
+RUN cd mcp-servers/packages/outline && npm install
 
 # Copy source
 COPY . .
