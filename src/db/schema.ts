@@ -67,6 +67,44 @@ export const oauthTokens = sqliteTable("oauth_tokens", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+// Per-chat standup configuration
+export const standupConfig = sqliteTable("standup_config", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  telegramChatId: integer("telegram_chat_id").notNull().unique(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().$defaultFn(() => true),
+  promptHour: integer("prompt_hour").notNull().$defaultFn(() => 9),
+  summaryHour: integer("summary_hour").notNull().$defaultFn(() => 17),
+  timezone: text("timezone").notNull().$defaultFn(() => "Australia/Sydney"),
+  skipBreakDays: integer("skip_break_days", { mode: "boolean" }).notNull().$defaultFn(() => true),
+  skipWeekends: integer("skip_weekends", { mode: "boolean" }).notNull().$defaultFn(() => true),
+});
+
+// One row per chat per day for standup sessions
+export const standupSessions = sqliteTable("standup_sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  telegramChatId: integer("telegram_chat_id").notNull(),
+  date: text("date").notNull(), // "YYYY-MM-DD"
+  promptMessageId: integer("prompt_message_id"),
+  summaryMessageId: integer("summary_message_id"),
+  status: text("status").notNull().$defaultFn(() => "active"), // active | summarized | skipped
+}, (t) => [
+  unique().on(t.telegramChatId, t.date),
+]);
+
+// Individual user standup responses
+export const standupResponses = sqliteTable("standup_responses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: integer("session_id").notNull(),
+  telegramUserId: integer("telegram_user_id").notNull(),
+  telegramUsername: text("telegram_username"),
+  yesterday: text("yesterday"),
+  today: text("today"),
+  blockers: text("blockers"),
+  rawMessage: text("raw_message"),
+}, (t) => [
+  unique().on(t.sessionId, t.telegramUserId),
+]);
+
 // Tracks active/completed naming ceremonies
 export const namingCeremonies = sqliteTable("naming_ceremonies", {
   id: integer("id").primaryKey({ autoIncrement: true }),

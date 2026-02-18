@@ -319,3 +319,146 @@ export async function getExpiredCeremonies() {
     .all();
   return results;
 }
+
+// Standup Config
+
+export async function getStandupConfig(telegramChatId: number) {
+  const results = db
+    .select()
+    .from(schema.standupConfig)
+    .where(eq(schema.standupConfig.telegramChatId, telegramChatId))
+    .all();
+  return results[0] || null;
+}
+
+export async function upsertStandupConfig(data: {
+  telegramChatId: number;
+  enabled?: boolean;
+  promptHour?: number;
+  summaryHour?: number;
+  timezone?: string;
+  skipBreakDays?: boolean;
+  skipWeekends?: boolean;
+}) {
+  return db
+    .insert(schema.standupConfig)
+    .values({
+      telegramChatId: data.telegramChatId,
+      enabled: data.enabled ?? true,
+      promptHour: data.promptHour ?? 9,
+      summaryHour: data.summaryHour ?? 17,
+      timezone: data.timezone ?? "Australia/Sydney",
+      skipBreakDays: data.skipBreakDays ?? true,
+      skipWeekends: data.skipWeekends ?? true,
+    })
+    .onConflictDoUpdate({
+      target: schema.standupConfig.telegramChatId,
+      set: {
+        ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+        ...(data.promptHour !== undefined ? { promptHour: data.promptHour } : {}),
+        ...(data.summaryHour !== undefined ? { summaryHour: data.summaryHour } : {}),
+        ...(data.timezone !== undefined ? { timezone: data.timezone } : {}),
+        ...(data.skipBreakDays !== undefined ? { skipBreakDays: data.skipBreakDays } : {}),
+        ...(data.skipWeekends !== undefined ? { skipWeekends: data.skipWeekends } : {}),
+      },
+    })
+    .run();
+}
+
+export async function getAllStandupConfigs() {
+  return db.select().from(schema.standupConfig).all();
+}
+
+// Standup Sessions
+
+export async function getActiveStandupSession(telegramChatId: number, date: string) {
+  const results = db
+    .select()
+    .from(schema.standupSessions)
+    .where(
+      and(
+        eq(schema.standupSessions.telegramChatId, telegramChatId),
+        eq(schema.standupSessions.date, date)
+      )
+    )
+    .all();
+  return results[0] || null;
+}
+
+export async function createStandupSession(data: {
+  telegramChatId: number;
+  date: string;
+  promptMessageId?: number | null;
+  status?: string;
+}) {
+  return db
+    .insert(schema.standupSessions)
+    .values({
+      telegramChatId: data.telegramChatId,
+      date: data.date,
+      promptMessageId: data.promptMessageId ?? null,
+      status: data.status ?? "active",
+    })
+    .run();
+}
+
+export async function updateStandupSession(
+  id: number,
+  data: Partial<{
+    promptMessageId: number | null;
+    summaryMessageId: number | null;
+    status: string;
+  }>
+) {
+  return db
+    .update(schema.standupSessions)
+    .set(data)
+    .where(eq(schema.standupSessions.id, id))
+    .run();
+}
+
+// Standup Responses
+
+export async function upsertStandupResponse(data: {
+  sessionId: number;
+  telegramUserId: number;
+  telegramUsername?: string | null;
+  yesterday?: string | null;
+  today?: string | null;
+  blockers?: string | null;
+  rawMessage?: string | null;
+}) {
+  return db
+    .insert(schema.standupResponses)
+    .values({
+      sessionId: data.sessionId,
+      telegramUserId: data.telegramUserId,
+      telegramUsername: data.telegramUsername ?? null,
+      yesterday: data.yesterday ?? null,
+      today: data.today ?? null,
+      blockers: data.blockers ?? null,
+      rawMessage: data.rawMessage ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.standupResponses.sessionId,
+        schema.standupResponses.telegramUserId,
+      ],
+      set: {
+        telegramUsername: data.telegramUsername ?? null,
+        yesterday: data.yesterday ?? null,
+        today: data.today ?? null,
+        blockers: data.blockers ?? null,
+        rawMessage: data.rawMessage ?? null,
+      },
+    })
+    .run();
+}
+
+export async function getStandupResponses(sessionId: number) {
+  return db
+    .select()
+    .from(schema.standupResponses)
+    .where(eq(schema.standupResponses.sessionId, sessionId))
+    .all();
+}
