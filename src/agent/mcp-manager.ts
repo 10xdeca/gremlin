@@ -146,6 +146,9 @@ class McpManager {
           RADICALE_URL: process.env.RADICALE_URL || "https://dav.xdeca.com",
           RADICALE_USERNAME: process.env.RADICALE_USERNAME || "pm-agent",
           RADICALE_PASSWORD: radicalePassword,
+          ...(process.env.RADICALE_CALENDAR_OWNER
+            ? { RADICALE_CALENDAR_OWNER: process.env.RADICALE_CALENDAR_OWNER }
+            : {}),
         },
       });
     } else {
