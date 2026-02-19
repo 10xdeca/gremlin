@@ -135,6 +135,23 @@ class McpManager {
       console.warn("MCP Manager: OUTLINE_API_KEY not set, skipping Outline MCP server");
     }
 
+    // Radicale MCP server
+    const radicalePassword = process.env.RADICALE_PASSWORD;
+    if (radicalePassword) {
+      configs.push({
+        name: "radicale",
+        command: "node",
+        args: [resolve(mcpRoot, "radicale/index.js")],
+        env: {
+          RADICALE_URL: process.env.RADICALE_URL || "https://dav.xdeca.com",
+          RADICALE_USERNAME: process.env.RADICALE_USERNAME || "pm-agent",
+          RADICALE_PASSWORD: radicalePassword,
+        },
+      });
+    } else {
+      console.warn("MCP Manager: RADICALE_PASSWORD not set, skipping Radicale MCP server");
+    }
+
     return configs;
   }
 

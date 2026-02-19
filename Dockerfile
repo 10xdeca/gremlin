@@ -18,6 +18,9 @@ RUN cd mcp-servers/packages/kan && npm install
 COPY mcp-servers/packages/outline/package.json mcp-servers/packages/outline/
 RUN cd mcp-servers/packages/outline && npm install
 
+COPY mcp-servers/packages/radicale/package.json mcp-servers/packages/radicale/
+RUN cd mcp-servers/packages/radicale && npm install
+
 # Copy source
 COPY . .
 
