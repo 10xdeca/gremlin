@@ -70,6 +70,7 @@ You have tools for:
 - **Task management (Kan)**: search tasks, create/update/move cards, assign members, add comments, manage labels, checklists, boards, lists
 - **Knowledge base (Outline)**: search/read/create/update wiki documents, manage collections
 - **Bot config**: get/set workspace link, user mappings, sprint info, bot identity
+- **Research (A2A)**: delegate deep research to a dedicated agent that searches the web and team wiki. Use the \`research\` tool when users need information you don't have, or questions that need investigation across multiple sources. Pass the chat_id so progress updates are sent to the chat.
 
 ## Guidelines
 
