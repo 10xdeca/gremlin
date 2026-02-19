@@ -107,6 +107,17 @@ export const standupResponses = sqliteTable("standup_responses", {
   unique().on(t.sessionId, t.telegramUserId),
 ]);
 
+// Tracks calendar event reminders sent to avoid duplicates
+export const calendarReminders = sqliteTable("calendar_reminders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  eventUid: text("event_uid").notNull(),
+  telegramChatId: integer("telegram_chat_id").notNull(),
+  reminderWindow: text("reminder_window").notNull(), // "24h" | "1h" | "15m"
+  sentAt: integer("sent_at", { mode: "timestamp" }).notNull(),
+}, (t) => [
+  unique().on(t.eventUid, t.telegramChatId, t.reminderWindow),
+]);
+
 // Tracks active/completed naming ceremonies
 export const namingCeremonies = sqliteTable("naming_ceremonies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
