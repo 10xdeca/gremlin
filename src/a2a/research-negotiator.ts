@@ -54,13 +54,14 @@ export async function conductResearch(
       .catch((err) => console.error("Failed to send progress:", err));
   };
 
-  // Wrap the entire research session in a timeout
-  const timeoutPromise = new Promise<string>((_, reject) =>
-    setTimeout(
+  // Wrap the entire research session in a timeout (cleared on completion)
+  let timeoutTimer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<string>((_, reject) => {
+    timeoutTimer = setTimeout(
       () => reject(new Error("Research timed out after 2 minutes")),
       RESEARCH_TIMEOUT_MS
-    )
-  );
+    );
+  });
 
   const researchPromise = (async () => {
     // Initial request
@@ -163,6 +164,8 @@ export async function conductResearch(
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error("Research session error:", errorMsg);
     finalReport = `Research could not be completed: ${errorMsg}`;
+  } finally {
+    clearTimeout(timeoutTimer!);
   }
 
   return finalReport;
@@ -190,20 +193,17 @@ async function processStream(
     if (event.kind === "task") {
       // Initial task creation — capture IDs
       onIds?.(event.id, event.contextId);
+    } else if (event.kind === "message") {
+      // Agent message — extract text as part of the report
+      const text = getPartsText(event.parts);
+      if (text) report = text;
     } else if (event.kind === "status-update") {
       const state = event.status.state;
       const messageText = getMessageText(event);
 
       if (state === "working" && messageText) {
-        // Send progress updates to Telegram
-        const shortStatus = messageText.slice(0, 200);
-        if (
-          shortStatus.startsWith("Searching") ||
-          shortStatus.startsWith("Investigating") ||
-          shortStatus.startsWith("Compiling")
-        ) {
-          sendProgress(shortStatus);
-        }
+        // Forward all working status messages as Telegram progress updates
+        sendProgress(messageText.slice(0, 200));
       } else if (state === "input-required" && messageText) {
         interimFindings = messageText;
       } else if (state === "completed") {
@@ -219,13 +219,8 @@ async function processStream(
         onIds?.(event.taskId, event.contextId);
       }
     } else if (event.kind === "artifact-update") {
-      const artifactText = event.artifact.parts
-        .filter((p) => p.kind === "text" && "text" in p)
-        .map((p) => ("text" in p ? p.text : ""))
-        .join("\n");
-      if (artifactText) {
-        report = artifactText;
-      }
+      const artifactText = getPartsText(event.artifact.parts);
+      if (artifactText) report = artifactText;
     }
   }
 
@@ -234,9 +229,13 @@ async function processStream(
 
 /** Extract text from a status update's message. */
 function getMessageText(event: TaskStatusUpdateEvent): string {
-  const parts = event.status.message?.parts || [];
+  return getPartsText(event.status.message?.parts || []);
+}
+
+/** Extract concatenated text from an array of message parts. */
+function getPartsText(parts: Array<{ kind: string; text?: string }>): string {
   return parts
     .filter((p) => p.kind === "text" && "text" in p)
-    .map((p) => ("text" in p ? p.text : ""))
+    .map((p) => p.text ?? "")
     .join("\n");
 }
