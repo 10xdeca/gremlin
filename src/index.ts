@@ -20,6 +20,7 @@ import { registerStandupTools } from "./tools/standup.js";
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
 import { startStandupChecker } from "./scheduler/standup-checker.js";
+import { startCalendarChecker } from "./scheduler/calendar-checker.js";
 
 // Admin check
 const ADMIN_USER_IDS: Set<number> = new Set(
@@ -195,6 +196,9 @@ async function main() {
 
   // Start the standup checker (daily prompts and summaries)
   startStandupChecker(bot);
+
+  // Start the calendar checker (event reminders at 24h, 1h, 15m)
+  startCalendarChecker(bot);
 
   // Start polling
   console.log("Starting polling...");

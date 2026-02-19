@@ -115,6 +115,15 @@ sqlite.exec(`
     last_reminder_at INTEGER NOT NULL,
     UNIQUE(card_public_id, telegram_chat_id, reminder_type)
   );
+
+  CREATE TABLE IF NOT EXISTS calendar_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_uid TEXT NOT NULL,
+    telegram_chat_id INTEGER NOT NULL,
+    reminder_window TEXT NOT NULL,
+    sent_at INTEGER NOT NULL,
+    UNIQUE(event_uid, telegram_chat_id, reminder_window)
+  );
 `);
 
 // Migration: Add reminder_type column to existing databases

@@ -1,4 +1,4 @@
-import { eq, and, lt, desc } from "drizzle-orm";
+import { eq, and, lt, desc, sql } from "drizzle-orm";
 import { db, schema } from "./client.js";
 
 // Workspace Links
@@ -465,4 +465,48 @@ export async function getStandupResponses(sessionId: number) {
     .from(schema.standupResponses)
     .where(eq(schema.standupResponses.sessionId, sessionId))
     .all();
+}
+
+// Calendar Reminders
+
+export async function hasCalendarReminderBeenSent(
+  eventUid: string,
+  telegramChatId: number,
+  reminderWindow: string,
+): Promise<boolean> {
+  const results = db
+    .select()
+    .from(schema.calendarReminders)
+    .where(
+      and(
+        eq(schema.calendarReminders.eventUid, eventUid),
+        eq(schema.calendarReminders.telegramChatId, telegramChatId),
+        eq(schema.calendarReminders.reminderWindow, reminderWindow),
+      ),
+    )
+    .all();
+  return results.length > 0;
+}
+
+export async function recordCalendarReminder(
+  eventUid: string,
+  telegramChatId: number,
+  reminderWindow: string,
+): Promise<void> {
+  db.insert(schema.calendarReminders)
+    .values({
+      eventUid,
+      telegramChatId,
+      reminderWindow,
+      sentAt: new Date(),
+    })
+    .onConflictDoNothing()
+    .run();
+}
+
+export async function cleanOldCalendarReminders(daysOld: number = 7): Promise<void> {
+  const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+  db.delete(schema.calendarReminders)
+    .where(lt(schema.calendarReminders.sentAt, cutoff))
+    .run();
 }
