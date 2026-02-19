@@ -101,9 +101,17 @@ function formatReminderMessage(event: CalendarEvent, window: ReminderWindow): st
   const escapedTime = escapeMarkdown(timeStr);
   const escapedDate = escapeMarkdown(dateStr);
 
+  // Check if the event is actually on a different calendar day (tomorrow)
+  const tz = "Australia/Sydney";
+  const todayStr = new Date().toLocaleDateString("en-AU", { timeZone: tz });
+  const eventDayStr = eventStart.toLocaleDateString("en-AU", { timeZone: tz });
+  const isTomorrow = todayStr !== eventDayStr;
+
   switch (window) {
-    case "24h":
-      return `\u{1F4C5} *Tomorrow:* ${escapedSummary} \u2014 ${escapedDate} at ${escapedTime} AEDT`;
+    case "24h": {
+      const label = isTomorrow ? "Tomorrow" : "Coming up";
+      return `\u{1F4C5} *${label}:* ${escapedSummary} \u2014 ${escapedDate} at ${escapedTime} AEDT`;
+    }
     case "1h":
       return `\u{23F0} *In 1 hour:* ${escapedSummary} \u2014 ${escapedTime} AEDT`;
     case "15m":

@@ -118,8 +118,6 @@ export const calendarReminders = sqliteTable("calendar_reminders", {
   unique().on(t.eventUid, t.telegramChatId, t.reminderWindow),
 ]);
 
-export type CalendarReminderWindow = "24h" | "1h" | "15m";
-
 // Tracks active/completed naming ceremonies
 export const namingCeremonies = sqliteTable("naming_ceremonies", {
   id: integer("id").primaryKey({ autoIncrement: true }),

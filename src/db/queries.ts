@@ -1,4 +1,4 @@
-import { eq, and, lt, desc, sql } from "drizzle-orm";
+import { eq, and, lt, desc } from "drizzle-orm";
 import { db, schema } from "./client.js";
 
 // Workspace Links
