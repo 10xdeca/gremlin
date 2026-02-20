@@ -10,6 +10,7 @@ import {
 } from "../db/queries.js";
 import { evaluateTaskVagueness } from "../services/vagueness-evaluator.js";
 import { isSprintPlanningWindow, getSprintInfo } from "../utils/sprint.js";
+import { handleUnreachableChat } from "../utils/telegram.js";
 import type { ReminderType } from "../db/schema.js";
 
 const REMINDER_INTERVAL_HOURS = parseInt(
@@ -245,6 +246,7 @@ async function sendReminderMessage(
     await upsertReminder(cardPublicId, chatId, reminderType);
     console.log(`Sent ${reminderType} reminder for "${cardTitle}" to chat ${chatId}`);
   } catch (error) {
+    if (await handleUnreachableChat(error, chatId)) return;
     console.error(`Failed to send ${reminderType} reminder to chat ${chatId}:`, error);
   }
 }
@@ -357,6 +359,7 @@ async function checkNoDueDates(
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date");
       }
     } catch (error) {
+      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
       console.error(`Failed to send no-due-date reminder to chat ${workspaceLink.telegramChatId}:`, error);
     }
   } catch (error) {
@@ -423,6 +426,7 @@ async function checkVagueTasks(
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "vague");
       }
     } catch (error) {
+      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
       console.error(`Failed to send vague task reminder to chat ${workspaceLink.telegramChatId}:`, error);
     }
   } catch (error) {
@@ -519,6 +523,7 @@ async function checkUnassignedTasks(
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "unassigned");
       }
     } catch (error) {
+      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
       console.error(`Failed to send unassigned reminder to chat ${workspaceLink.telegramChatId}:`, error);
     }
   } catch (error) {

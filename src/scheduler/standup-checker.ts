@@ -15,6 +15,7 @@ import {
   isWeekendInTimezone,
 } from "../utils/timezone.js";
 import { isBreakDay } from "../utils/sprint.js";
+import { handleUnreachableChat } from "../utils/telegram.js";
 import { formatStandupSummary } from "../services/standup-summarizer.js";
 import { mcpManager } from "../agent/mcp-manager.js";
 
@@ -145,6 +146,7 @@ async function sendStandupPrompt(
 
     console.log(`Sent standup prompt for chat ${telegramChatId} (${today})`);
   } catch (error) {
+    if (await handleUnreachableChat(error, telegramChatId)) return;
     console.error(`Failed to send standup prompt for chat ${telegramChatId}:`, error);
   }
 }
@@ -196,6 +198,7 @@ async function sendStandupSummary(
 
     console.log(`Sent standup summary for chat ${telegramChatId} (${session.date})`);
   } catch (error) {
+    if (await handleUnreachableChat(error, telegramChatId)) return;
     console.error(`Failed to send standup summary for chat ${telegramChatId}:`, error);
   }
 }

@@ -7,6 +7,7 @@ import {
   recordCalendarReminder,
   cleanOldCalendarReminders,
 } from "../db/queries.js";
+import { handleUnreachableChat } from "../utils/telegram.js";
 
 /** Shape returned by radicale_list_events. */
 interface CalendarEvent {
@@ -181,6 +182,7 @@ async function checkCalendarEvents(bot: Bot): Promise<void> {
           await recordCalendarReminder(event.uid, link.telegramChatId, window);
           console.log(`Sent ${window} reminder for "${event.summary}" to chat ${link.telegramChatId}`);
         } catch (error) {
+          if (await handleUnreachableChat(error, link.telegramChatId)) continue;
           console.error(`Failed to send calendar reminder to chat ${link.telegramChatId}:`, error);
         }
       }
