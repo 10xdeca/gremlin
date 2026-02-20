@@ -48,6 +48,12 @@ export function startCalendarChecker(bot: Bot): void {
     console.log("Cleaning old calendar reminders...");
     await cleanOldCalendarReminders(7);
   });
+
+  // Run once on startup after a short delay
+  setTimeout(() => {
+    console.log("Running initial calendar check...");
+    checkCalendarEvents(bot);
+  }, 10000);
 }
 
 /** Discover the calendar URL, cached after first call. */
