@@ -16,7 +16,6 @@ import { registerUserMappingTools } from "./tools/user-mapping.js";
 import { registerSprintInfoTools } from "./tools/sprint-info.js";
 import { registerBotIdentityTools } from "./tools/bot-identity.js";
 import { registerStandupTools } from "./tools/standup.js";
-import { registerResearchTool } from "./tools/research.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -188,9 +187,6 @@ async function main() {
   const botInfo = await bot.api.getMe();
   botUsername = botInfo.username;
   console.log(`Bot verified: @${botInfo.username}`);
-
-  // Register research tool (requires bot.api for progress messages)
-  registerResearchTool(bot.api);
 
   // Clear old bot commands menu (all interaction is natural language now)
   await bot.api.setMyCommands([]);
