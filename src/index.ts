@@ -125,10 +125,16 @@ bot.on("message:text", async (ctx) => {
     ctx.me?.id
   )) return;
 
-  // In groups with a configured topic, only process messages from that topic
+  // In groups with a configured topic:
+  // - In the configured topic (Project Management): process normally (all messages)
+  // - In other topics: only process @mentions and replies to the bot
   if (ctx.chat.type !== "private") {
     const configuredTopic = await getConfiguredTopicId(chatId);
-    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) return;
+    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) {
+      const isMentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+      const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
+      if (!isMentioned && !isReplyToBot) return;
+    }
   }
 
   // Track last agent call for cooldown
