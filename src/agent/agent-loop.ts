@@ -3,7 +3,11 @@ import type { Api } from "grammy";
 import { getAnthropicTools, executeTool } from "./tool-registry.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { getHistory, appendToHistory } from "./conversation-history.js";
-import { getAnthropicClient } from "../services/anthropic-client.js";
+import {
+  getAnthropicClient,
+  invalidateCachedClient,
+} from "../services/anthropic-client.js";
+import { alertAdmins } from "../services/admin-alerts.js";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOOL_ROUNDS = 10;
@@ -21,6 +25,19 @@ interface AgentInput {
 }
 
 /**
+ * Check whether an error is an Anthropic API auth failure (401).
+ * The SDK throws errors with a `status` property for HTTP-level failures.
+ */
+function isApiAuthError(err: unknown): boolean {
+  return (
+    err != null &&
+    typeof err === "object" &&
+    "status" in err &&
+    (err as { status: number }).status === 401
+  );
+}
+
+/**
  * Run the agent loop: send message to Claude, execute tool calls, return final text.
  * Sends typing indicators while working.
  */
@@ -28,7 +45,15 @@ export async function runAgentLoop(
   api: Api,
   input: AgentInput
 ): Promise<string> {
-  const anthropic = await getAnthropicClient();
+  let anthropic: Anthropic;
+  try {
+    anthropic = await getAnthropicClient();
+  } catch (err) {
+    // getAnthropicClient already logs and alerts admins
+    console.error("Failed to get Anthropic client:", err);
+    return "I'm having trouble with my brain connection right now. The team has been notified.";
+  }
+
   const tools = getAnthropicTools();
   const systemPrompt = await buildSystemPrompt({
     chatId: input.chatId,
@@ -58,13 +83,28 @@ export async function runAgentLoop(
   while (rounds < MAX_TOOL_ROUNDS) {
     rounds++;
 
-    response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      tools,
-      messages,
-    });
+    try {
+      response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        system: systemPrompt,
+        tools,
+        messages,
+      });
+    } catch (err) {
+      if (isApiAuthError(err)) {
+        // Access token rejected mid-session — force re-auth on next call
+        console.error("Anthropic API returned 401 during messages.create:", err);
+        invalidateCachedClient();
+        alertAdmins(
+          "token_auth",
+          "Access token rejected by Anthropic API during a conversation. Client cache invalidated — next request will attempt re-auth."
+        );
+        return "I'm having trouble with my brain connection right now. The team has been notified.";
+      }
+      // Non-auth API error — let it propagate to the outer catch in index.ts
+      throw err;
+    }
 
     // Check if there are tool calls
     const toolUseBlocks = response.content.filter(
