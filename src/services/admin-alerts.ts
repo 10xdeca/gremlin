@@ -10,12 +10,17 @@ const RATE_LIMIT_MS = 60 * 60 * 1000; // 1 alert per type per hour
 /** Tracks the last alert timestamp per alert type to prevent spam. */
 const lastAlertAt = new Map<string, number>();
 
-/** Parse admin user IDs from env once. */
+/** Cached admin user IDs — parsed from env on first use. */
+let cachedAdminIds: number[] | null = null;
+
+/** Parse admin user IDs from env, caching the result. */
 function getAdminUserIds(): number[] {
-  return (process.env.ADMIN_USER_IDS || "")
+  if (cachedAdminIds) return cachedAdminIds;
+  cachedAdminIds = (process.env.ADMIN_USER_IDS || "")
     .split(",")
     .map((id) => parseInt(id.trim(), 10))
     .filter((id) => !isNaN(id));
+  return cachedAdminIds;
 }
 
 /**
