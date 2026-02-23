@@ -60,6 +60,11 @@ This is the source code only. Deployment config is in `xdeca-infra/xdeca-pm-bot/
 - Reminders use a `(card_public_id, telegram_chat_id, reminder_type)` UNIQUE constraint to prevent duplicates
 - Sprint planning window (days 1-2) gates certain reminder types
 
+## Known Kan API Quirks
+
+- **Card move requires `index`**: The Kan API returns 500 if you PUT to `/cards/:id` with `listPublicId` but without `index`. Fixed in `mcp-servers/packages/kan/index.js` — `kan_update_card` now defaults `index` to `0` when `list_id` is provided without an explicit index. (PR #33)
+- Tool call logging was added at `src/agent/agent-loop.ts:98` to aid debugging MCP tool failures.
+
 ## Environment Variables
 
 See `.env.example` for all required and optional variables. Key additions for the MCP-based architecture:

@@ -1,0 +1,26 @@
+services:
+  xdeca-pm-bot:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: xdeca-pm-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - KAN_BASE_URL=${KAN_BASE_URL:-https://tasks.xdeca.com/api/v1}
+      - KAN_API_KEY=${KAN_API_KEY}
+      - CLAUDE_REFRESH_TOKEN=${CLAUDE_REFRESH_TOKEN}
+      - OUTLINE_API_KEY=${OUTLINE_API_KEY:-}
+      - OUTLINE_BASE_URL=${OUTLINE_BASE_URL:-https://kb.xdeca.com/api}
+      - RADICALE_URL=${RADICALE_URL:-https://dav.xdeca.com}
+      - RADICALE_USERNAME=${RADICALE_USERNAME:-pm-agent}
+      - RADICALE_PASSWORD=${RADICALE_PASSWORD}
+      - RADICALE_CALENDAR_OWNER=${RADICALE_CALENDAR_OWNER:-nick}
+      - SPRINT_START_DATE=${SPRINT_START_DATE:-2025-01-05}
+      - REMINDER_INTERVAL_HOURS=${REMINDER_INTERVAL_HOURS:-1}
+      - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+    volumes:
+      - xdeca_pm_bot_data:/app/data
+
+volumes:
+  xdeca_pm_bot_data:

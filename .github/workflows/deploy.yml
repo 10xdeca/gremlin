@@ -1,0 +1,90 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Generate .env file
+        run: |
+          cat > .env <<'ENVEOF'
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          KAN_API_KEY=${{ secrets.KAN_API_KEY }}
+          KAN_BASE_URL=${{ secrets.KAN_BASE_URL }}
+          CLAUDE_REFRESH_TOKEN=${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          OUTLINE_API_KEY=${{ secrets.OUTLINE_API_KEY }}
+          OUTLINE_BASE_URL=${{ secrets.OUTLINE_BASE_URL }}
+          RADICALE_PASSWORD=${{ secrets.RADICALE_PASSWORD }}
+          SPRINT_START_DATE=${{ secrets.SPRINT_START_DATE }}
+          REMINDER_INTERVAL_HOURS=${{ secrets.REMINDER_INTERVAL_HOURS }}
+          ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
+          ENVEOF
+          # Strip leading whitespace from heredoc indentation
+          sed -i 's/^[[:space:]]*//' .env
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy compose + env
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            deploy/docker-compose.yml .env \
+            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-pm-bot/
+
+      - name: Deploy source
+        run: |
+          rsync -avz --delete \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude .env \
+            --exclude data \
+            --exclude .git \
+            --exclude .github \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ \
+            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-pm-bot/src/
+
+      - name: Build and restart
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+            'cd ~/apps/xdeca-pm-bot && docker compose build --pull && docker compose up -d'
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          STATUS=$(ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+            'docker inspect --format="{{ .State.Status }}" xdeca-pm-bot')
+          echo "Container status: $STATUS"
+          if [ "$STATUS" != "running" ]; then
+            echo "::error::Container is not running! Dumping logs:"
+            ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+              'docker logs --tail 50 xdeca-pm-bot'
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f .env ~/.ssh/deploy_key
