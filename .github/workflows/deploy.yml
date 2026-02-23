@@ -22,6 +22,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Generate deploy diff
+        run: |
+          echo "DEPLOY_SHA=$(git rev-parse --short HEAD)" > deploy-info.txt
+          echo "DEPLOY_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> deploy-info.txt
+          echo "---" >> deploy-info.txt
+          git diff HEAD~1 --stat >> deploy-info.txt
+          echo "---" >> deploy-info.txt
+          git diff HEAD~1 >> deploy-info.txt
+
       - name: Generate .env file
         run: |
           cat > .env <<'ENVEOF'

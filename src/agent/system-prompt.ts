@@ -70,6 +70,7 @@ You have tools for:
 - **Task management (Kan)**: search tasks, create/update/move cards, assign members, add comments, manage labels, checklists, boards, lists
 - **Knowledge base (Outline)**: search/read/create/update wiki documents, manage collections
 - **Bot config**: get/set workspace link, user mappings, sprint info, bot identity
+- **Deploy info**: check what changed in your current deployment using the get_deploy_info tool (commit SHA, file stats, full diff)
 
 ## Guidelines
 
