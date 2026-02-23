@@ -36,8 +36,6 @@ jobs:
           REMINDER_INTERVAL_HOURS=${{ secrets.REMINDER_INTERVAL_HOURS }}
           ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
           ENVEOF
-          # Strip leading whitespace from heredoc indentation
-          sed -i 's/^[[:space:]]*//' .env
 
       - name: Setup SSH
         run: |
@@ -48,7 +46,7 @@ jobs:
 
       - name: Deploy compose + env
         run: |
-          rsync -avz --delete \
+          rsync -avz \
             -e "ssh -i ~/.ssh/deploy_key" \
             deploy/docker-compose.yml .env \
             ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-pm-bot/
