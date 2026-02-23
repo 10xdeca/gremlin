@@ -155,13 +155,26 @@ bot.on("message:text", async (ctx) => {
     });
 
     if (response) {
-      await ctx.reply(response, {
-        parse_mode: "Markdown",
-        link_preview_options: { is_disabled: true },
+      const replyOpts = {
+        link_preview_options: { is_disabled: true } as const,
         ...(ctx.message?.message_thread_id
           ? { message_thread_id: ctx.message.message_thread_id }
           : {}),
-      });
+      };
+      try {
+        await ctx.reply(response, { parse_mode: "Markdown", ...replyOpts });
+      } catch (markdownError: unknown) {
+        // If Telegram can't parse the Markdown, fall back to plain text
+        const isParseError =
+          markdownError instanceof Error &&
+          markdownError.message.includes("can't parse entities");
+        if (isParseError) {
+          console.warn("Markdown parse failed, falling back to plain text");
+          await ctx.reply(response, replyOpts);
+        } else {
+          throw markdownError;
+        }
+      }
     }
   } catch (error) {
     console.error("Agent loop error:", error);
