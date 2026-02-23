@@ -22,6 +22,7 @@ import { registerDeployInfoTools } from "./tools/deploy-info.js";
 import { startTaskChecker } from "./scheduler/task-checker.js";
 import { startStandupChecker } from "./scheduler/standup-checker.js";
 import { startCalendarChecker } from "./scheduler/calendar-checker.js";
+import { startTokenHealthChecker } from "./scheduler/token-health.js";
 
 // Admin check
 const ADMIN_USER_IDS: Set<number> = new Set(
@@ -220,6 +221,9 @@ async function main() {
 
   // Start the calendar checker (event reminders at 24h, 1h, 15m)
   startCalendarChecker(bot);
+
+  // Start the token health checker (proactive auth validation every 4h)
+  startTokenHealthChecker();
 
   // Start polling
   console.log("Starting polling...");
