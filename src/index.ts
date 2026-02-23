@@ -16,6 +16,7 @@ import { registerUserMappingTools } from "./tools/user-mapping.js";
 import { registerSprintInfoTools } from "./tools/sprint-info.js";
 import { registerBotIdentityTools } from "./tools/bot-identity.js";
 import { registerStandupTools } from "./tools/standup.js";
+import { registerDeployInfoTools } from "./tools/deploy-info.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -198,6 +199,7 @@ async function main() {
   registerSprintInfoTools();
   registerBotIdentityTools();
   registerStandupTools();
+  registerDeployInfoTools();
 
   // Initialize MCP servers
   await mcpManager.init();

@@ -21,6 +21,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 2
+
+      - name: Generate deploy diff
+        run: |
+          echo "DEPLOY_SHA=$(git rev-parse --short HEAD)" > deploy-info.txt
+          echo "DEPLOY_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> deploy-info.txt
+          echo "---" >> deploy-info.txt
+          git diff HEAD~1 --stat >> deploy-info.txt
+          echo "---" >> deploy-info.txt
+          git diff HEAD~1 >> deploy-info.txt
 
       - name: Generate .env file
         run: |
