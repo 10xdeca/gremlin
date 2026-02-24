@@ -100,7 +100,7 @@ class McpManager {
 
   /**
    * Health-check one or all MCP servers by pinging `listTools()`.
-   * Returns status per server.
+   * Each ping is capped at 5 seconds to avoid blocking on a hung subprocess.
    */
   async healthCheck(serverName?: string): Promise<McpServerHealth[]> {
     const targets = serverName
@@ -116,7 +116,10 @@ class McpManager {
         continue;
       }
       try {
-        const toolsResult = await server.client.listTools();
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Health check timed out (5s)")), 5000)
+        );
+        const toolsResult = await Promise.race([server.client.listTools(), timeout]);
         results.push({
           name,
           status: "healthy",
@@ -156,17 +159,18 @@ class McpManager {
     this.servers.delete(serverName);
 
     // Restart with the stored config
-    try {
-      await this.startServer(config);
-      const restarted = this.servers.get(serverName);
-      const toolCount = restarted?.tools.length ?? 0;
-      console.log(`MCP Manager: restarted ${serverName} with ${toolCount} tools`);
-      return { success: true, message: `Restarted ${serverName} with ${toolCount} tools` };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`MCP Manager: failed to restart ${serverName}:`, msg);
-      return { success: false, message: `Failed to restart ${serverName}: ${msg}` };
+    // Note: startServer() catches errors internally and logs them without re-throwing,
+    // so we check the map afterwards to detect silent failures.
+    await this.startServer(config);
+
+    if (!this.servers.has(serverName)) {
+      console.error(`MCP Manager: ${serverName} failed to restart (not in server map)`);
+      return { success: false, message: `Failed to restart ${serverName} — server did not come back up` };
     }
+
+    const toolCount = this.servers.get(serverName)!.tools.length;
+    console.log(`MCP Manager: restarted ${serverName} with ${toolCount} tools`);
+    return { success: true, message: `Restarted ${serverName} with ${toolCount} tools` };
   }
 
   /** Shut down all MCP servers. */
