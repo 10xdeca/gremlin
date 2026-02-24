@@ -99,6 +99,7 @@ jobs:
           COMMITS=$(git log --oneline -5 --no-merges)
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="-1002401283379" \
+            -d message_thread_id="101" \
             -d text="🟢 *Gremlin has entered the building.* Deploy successful on \`$(git rev-parse --short HEAD)\`
 
           *Recent changes:*
@@ -113,6 +114,7 @@ jobs:
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="-1002401283379" \
+            -d message_thread_id="101" \
             -d text="🔴 *Gremlin did not make it.* Deploy failed on \`$(git rev-parse --short HEAD)\` — check the logs, something is very wrong." \
             -d parse_mode="Markdown"
 
