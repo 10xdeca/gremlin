@@ -11,6 +11,13 @@ export interface McpTool {
   inputSchema: Record<string, unknown>;
 }
 
+export interface McpServerHealth {
+  name: string;
+  status: "healthy" | "unhealthy" | "stopped";
+  toolCount: number;
+  error?: string;
+}
+
 interface McpServerConfig {
   name: string;
   /** Path to the MCP server entry file (index.js) */
@@ -86,6 +93,86 @@ class McpManager {
     return this.servers.get(serverName)?.client ?? null;
   }
 
+  /** Get the names of all configured MCP servers. */
+  getServerNames(): string[] {
+    return Array.from(this.servers.keys());
+  }
+
+  /**
+   * Health-check one or all MCP servers by pinging `listTools()`.
+   * Each ping is capped at 5 seconds to avoid blocking on a hung subprocess.
+   */
+  async healthCheck(serverName?: string): Promise<McpServerHealth[]> {
+    const targets = serverName
+      ? [serverName]
+      : Array.from(this.servers.keys());
+
+    const results: McpServerHealth[] = [];
+
+    for (const name of targets) {
+      const server = this.servers.get(name);
+      if (!server) {
+        results.push({ name, status: "stopped", toolCount: 0, error: "Server not found" });
+        continue;
+      }
+      try {
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Health check timed out (5s)")), 5000)
+        );
+        const toolsResult = await Promise.race([server.client.listTools(), timeout]);
+        results.push({
+          name,
+          status: "healthy",
+          toolCount: toolsResult.tools.length,
+        });
+      } catch (err) {
+        results.push({
+          name,
+          status: "unhealthy",
+          toolCount: 0,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Restart a specific MCP server subprocess.
+   * Closes the existing transport, removes it from the map, and re-starts with the stored config.
+   */
+  async restartServer(serverName: string): Promise<{ success: boolean; message: string }> {
+    const server = this.servers.get(serverName);
+    if (!server) {
+      return { success: false, message: `Server "${serverName}" not found` };
+    }
+
+    const { config } = server;
+
+    // Tear down the existing server
+    try {
+      await server.transport.close();
+    } catch {
+      // Ignore close errors — the server may already be dead
+    }
+    this.servers.delete(serverName);
+
+    // Restart with the stored config
+    // Note: startServer() catches errors internally and logs them without re-throwing,
+    // so we check the map afterwards to detect silent failures.
+    await this.startServer(config);
+
+    if (!this.servers.has(serverName)) {
+      console.error(`MCP Manager: ${serverName} failed to restart (not in server map)`);
+      return { success: false, message: `Failed to restart ${serverName} — server did not come back up` };
+    }
+
+    const toolCount = this.servers.get(serverName)!.tools.length;
+    console.log(`MCP Manager: restarted ${serverName} with ${toolCount} tools`);
+    return { success: true, message: `Restarted ${serverName} with ${toolCount} tools` };
+  }
+
   /** Shut down all MCP servers. */
   async shutdown(): Promise<void> {
     for (const [name, server] of this.servers) {
@@ -158,7 +245,7 @@ class McpManager {
     return configs;
   }
 
-  private async startServer(config: McpServerConfig): Promise<void> {
+  async startServer(config: McpServerConfig): Promise<void> {
     try {
       const transport = new StdioClientTransport({
         command: config.command,
