@@ -19,12 +19,13 @@ Every user message flows through a Claude Haiku agent loop with access to Kan an
 Telegram Message → Grammy → Agent Loop (Claude Haiku + tools) → Response → Telegram
                                 ├── Kan MCP tools (task management)
                                 ├── Outline MCP tools (knowledge base)
+                                ├── Playwright MCP tools (web browsing, optional)
                                 └── Custom tools (DB config, sprint info, user mappings)
 ```
 
 - **Grammy** for Telegram bot framework
 - **@anthropic-ai/sdk** for Claude Haiku agent loop (all interactions) and vagueness evaluation (scheduler)
-- **@modelcontextprotocol/sdk** for MCP client (spawns kan-mcp and outline-mcp as subprocesses)
+- **@modelcontextprotocol/sdk** for MCP client (spawns kan-mcp, outline-mcp, and optionally playwright-mcp as subprocesses)
 - **better-sqlite3** + **Drizzle ORM** for local SQLite storage
 - **node-cron** for scheduled reminder checks (deterministic, no LLM)
 - **Conversation history**: In-memory sliding window per chat (last 20 messages, 30min TTL)
@@ -72,3 +73,4 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `KAN_API_KEY` — Kan API key (replaces old `KAN_SERVICE_API_KEY`)
 - `OUTLINE_API_KEY` — Outline wiki API key
 - `OUTLINE_BASE_URL` — Outline API base URL
+- `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
