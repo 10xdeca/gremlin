@@ -245,7 +245,7 @@ class McpManager {
     // Playwright MCP server (web browsing)
     if (process.env.PLAYWRIGHT_ENABLED === "true") {
       const cliPath = resolve(__dirname, "../../node_modules/@playwright/mcp/cli.js");
-      const flags = ["--headless", "--isolated"];
+      const flags = ["--headless", "--isolated", "--no-sandbox"];
 
       // Optional origin filtering
       if (process.env.PLAYWRIGHT_ALLOWED_ORIGINS) {
