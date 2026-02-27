@@ -244,24 +244,25 @@ class McpManager {
 
     // Playwright MCP server (web browsing)
     if (process.env.PLAYWRIGHT_ENABLED === "true") {
-      const playwrightArgs = ["@playwright/mcp", "--headless", "--isolated"];
+      const cliPath = resolve(__dirname, "../../node_modules/@playwright/mcp/cli.js");
+      const flags = ["--headless", "--isolated"];
 
       // Optional origin filtering
       if (process.env.PLAYWRIGHT_ALLOWED_ORIGINS) {
         for (const origin of process.env.PLAYWRIGHT_ALLOWED_ORIGINS.split(",")) {
-          playwrightArgs.push("--allowed-origins", origin.trim());
+          flags.push("--allowed-origins", origin.trim());
         }
       }
       if (process.env.PLAYWRIGHT_BLOCKED_ORIGINS) {
         for (const origin of process.env.PLAYWRIGHT_BLOCKED_ORIGINS.split(",")) {
-          playwrightArgs.push("--blocked-origins", origin.trim());
+          flags.push("--blocked-origins", origin.trim());
         }
       }
 
       configs.push({
         name: "playwright",
-        command: "npx",
-        args: playwrightArgs,
+        command: "node",
+        args: [cliPath, ...flags],
         env: {},
       });
     }

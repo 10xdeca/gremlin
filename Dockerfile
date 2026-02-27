@@ -12,7 +12,9 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 # Install Playwright Chromium browser + system deps (for web browsing MCP server)
-RUN npx playwright install --with-deps chromium
+# Skipped when INSTALL_PLAYWRIGHT=false to keep the image smaller
+ARG INSTALL_PLAYWRIGHT=true
+RUN if [ "$INSTALL_PLAYWRIGHT" = "true" ]; then npx playwright install --with-deps chromium; fi
 
 # Install MCP server dependencies
 COPY mcp-servers/packages/kan/package.json mcp-servers/packages/kan/
