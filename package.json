@@ -20,6 +20,7 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.42.0",
     "grammy": "^1.21.1",
+    "@playwright/mcp": "^0.0.68",
     "node-cron": "^3.0.3"
   },
   "devDependencies": {

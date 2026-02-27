@@ -242,6 +242,30 @@ class McpManager {
       console.warn("MCP Manager: RADICALE_PASSWORD not set, skipping Radicale MCP server");
     }
 
+    // Playwright MCP server (web browsing)
+    if (process.env.PLAYWRIGHT_ENABLED === "true") {
+      const playwrightArgs = ["@playwright/mcp", "--headless", "--isolated"];
+
+      // Optional origin filtering
+      if (process.env.PLAYWRIGHT_ALLOWED_ORIGINS) {
+        for (const origin of process.env.PLAYWRIGHT_ALLOWED_ORIGINS.split(",")) {
+          playwrightArgs.push("--allowed-origins", origin.trim());
+        }
+      }
+      if (process.env.PLAYWRIGHT_BLOCKED_ORIGINS) {
+        for (const origin of process.env.PLAYWRIGHT_BLOCKED_ORIGINS.split(",")) {
+          playwrightArgs.push("--blocked-origins", origin.trim());
+        }
+      }
+
+      configs.push({
+        name: "playwright",
+        command: "npx",
+        args: playwrightArgs,
+        env: {},
+      });
+    }
+
     return configs;
   }
 

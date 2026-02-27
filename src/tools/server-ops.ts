@@ -66,7 +66,7 @@ export function registerServerOpsTools(): void {
   registerCustomTool({
     name: "check_mcp_health",
     description:
-      "Health-check MCP server subprocesses (kan, outline, radicale). " +
+      "Health-check MCP server subprocesses (kan, outline, radicale, playwright). " +
       "Pings each server to verify it's responsive. This is the first tool to use " +
       "when a tool call fails — it reveals which server is down.",
     inputSchema: {
@@ -75,7 +75,7 @@ export function registerServerOpsTools(): void {
         server: {
           type: "string",
           description:
-            "Optional: check a specific server (kan, outline, radicale). " +
+            "Optional: check a specific server (kan, outline, radicale, playwright). " +
             "Omit to check all servers.",
         },
       },
@@ -91,7 +91,7 @@ export function registerServerOpsTools(): void {
   registerCustomTool({
     name: "restart_mcp_server",
     description:
-      "Restart a specific MCP server subprocess (kan, outline, or radicale). " +
+      "Restart a specific MCP server subprocess (kan, outline, radicale, or playwright). " +
       "This is the primary self-repair action — fast and surgical with no downtime " +
       "for other servers. Use after check_mcp_health reveals an unhealthy server.",
     inputSchema: {
@@ -99,7 +99,7 @@ export function registerServerOpsTools(): void {
       properties: {
         server: {
           type: "string",
-          description: "The MCP server to restart: kan, outline, or radicale",
+          description: "The MCP server to restart: kan, outline, radicale, or playwright",
         },
       },
       required: ["server"],

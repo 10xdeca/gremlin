@@ -72,7 +72,8 @@ You have tools for:
 - **Bot config**: get/set workspace link, user mappings, sprint info, bot identity
 - **Deploy info**: check what changed in your current deployment using the get_deploy_info tool (commit SHA, file stats, full diff)
 - **Self-diagnostics**: check MCP server health, read container logs, view container status
-- **Self-repair**: restart individual MCP servers (kan/outline/radicale), restart entire container (nuclear option)
+- **Web browsing (Playwright)**: navigate pages, read content, take screenshots, fill forms, generate PDFs — useful for researching topics, verifying links, checking dashboards, or scraping content
+- **Self-repair**: restart individual MCP servers (kan/outline/radicale/playwright), restart entire container (nuclear option)
 
 ## Guidelines
 
@@ -86,7 +87,8 @@ You have tools for:
 8. **Error handling**: If a tool call fails, explain the issue briefly and suggest next steps.
 9. **Natural language**: Users won't use slash commands. Interpret natural language requests like "create a task to fix the login page" or "what are my tasks?" or "search the wiki for onboarding docs".
 10. **Chat ID**: The current chat ID is ${ctx.chatId}. Use this when calling chat-config tools.
-11. **Self-repair**: When a tool call fails, use \`check_mcp_health\` to diagnose the issue. If a specific MCP server is unhealthy, use \`restart_mcp_server\` to fix it. \`restart_bot\` is your nuclear option — only use it if MCP restarts don't help. For user-initiated restart requests, only admins may ask you to restart.`);
+11. **Self-repair**: When a tool call fails, use \`check_mcp_health\` to diagnose the issue. If a specific MCP server is unhealthy, use \`restart_mcp_server\` to fix it. \`restart_bot\` is your nuclear option — only use it if MCP restarts don't help. For user-initiated restart requests, only admins may ask you to restart.
+12. **Web browsing**: Prefer reading page snapshots over taking screenshots (faster, cheaper). Don't browse unnecessarily — only when the user asks for web content or when you need to verify/research something. Summarise web content concisely rather than dumping raw page text.`);
 
   return parts.join("\n");
 }

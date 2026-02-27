@@ -11,6 +11,9 @@ COPY package.json package-lock.json* ./
 # Install dependencies with npm (not pnpm) to build native modules
 RUN npm install
 
+# Install Playwright Chromium browser + system deps (for web browsing MCP server)
+RUN npx playwright install --with-deps chromium
+
 # Install MCP server dependencies
 COPY mcp-servers/packages/kan/package.json mcp-servers/packages/kan/
 RUN cd mcp-servers/packages/kan && npm install
