@@ -71,23 +71,35 @@ export function registerUserMappingTools(): void {
       const kanEmail = args.kan_user_email as string;
       const memberPublicId = args.workspace_member_public_id as string | undefined;
 
-      // Check if email is already claimed by a different Telegram user
+      // Check if email is already claimed by a different Telegram user.
+      // Skip when telegramUserId is 0 (unknown) — compare by username instead
+      // to avoid false negatives when multiple users have placeholder ID 0.
       const emailOwner = await getUserLinkByEmail(kanEmail);
-      if (emailOwner && emailOwner.telegramUserId !== telegramUserId) {
-        return JSON.stringify({
-          success: false,
-          error: `Email ${kanEmail} is already mapped to Telegram user @${emailOwner.telegramUsername ?? emailOwner.telegramUserId}. Remove that mapping first, or use a different email.`,
-        });
+      if (emailOwner) {
+        const isSameUser = telegramUserId !== 0
+          ? emailOwner.telegramUserId === telegramUserId
+          : emailOwner.telegramUsername === (args.telegram_username as string);
+        if (!isSameUser) {
+          return JSON.stringify({
+            success: false,
+            error: `Email ${kanEmail} is already mapped to Telegram user @${emailOwner.telegramUsername ?? emailOwner.telegramUserId}. Remove that mapping first, or use a different email.`,
+          });
+        }
       }
 
       // Check if workspace member ID is already claimed by a different Telegram user
       if (memberPublicId) {
         const memberOwner = await getUserLinkByMemberPublicId(memberPublicId);
-        if (memberOwner && memberOwner.telegramUserId !== telegramUserId) {
-          return JSON.stringify({
-            success: false,
-            error: `Workspace member ID ${memberPublicId} is already mapped to Telegram user @${memberOwner.telegramUsername ?? memberOwner.telegramUserId}. Remove that mapping first, or use a different member ID.`,
-          });
+        if (memberOwner) {
+          const isSameUser = telegramUserId !== 0
+            ? memberOwner.telegramUserId === telegramUserId
+            : memberOwner.telegramUsername === (args.telegram_username as string);
+          if (!isSameUser) {
+            return JSON.stringify({
+              success: false,
+              error: `Workspace member ID ${memberPublicId} is already mapped to Telegram user @${memberOwner.telegramUsername ?? memberOwner.telegramUserId}. Remove that mapping first, or use a different member ID.`,
+            });
+          }
         }
       }
 

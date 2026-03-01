@@ -42,12 +42,13 @@ function loadFromDb(chatId: number): Anthropic.Messages.MessageParam[] {
       : (conv.lastActivity as number) * 1000;
     if (Date.now() - lastActivity > TTL_MS) return [];
 
-    // Load last MAX_MESSAGES messages, newest first, then reverse
+    // Load last MAX_MESSAGES messages, newest first, then reverse.
+    // Secondary sort by id ensures user→assistant ordering within same second.
     const rows = db
       .select()
       .from(schema.conversationMessages)
       .where(eq(schema.conversationMessages.telegramChatId, chatId))
-      .orderBy(desc(schema.conversationMessages.createdAt))
+      .orderBy(desc(schema.conversationMessages.createdAt), desc(schema.conversationMessages.id))
       .limit(MAX_MESSAGES)
       .all()
       .reverse();
