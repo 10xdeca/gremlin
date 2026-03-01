@@ -7,3 +7,4 @@ data/
 *.db-journal
 mcp-servers/*/node_modules/
 mcp-servers/*/package-lock.json
+.playwright-mcp/
