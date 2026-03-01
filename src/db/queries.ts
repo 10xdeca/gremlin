@@ -129,6 +129,15 @@ export async function getUserLinkByEmail(email: string) {
   return results[0] || null;
 }
 
+export async function getUserLinkByMemberPublicId(memberPublicId: string) {
+  const results = db
+    .select()
+    .from(schema.telegramUserLinks)
+    .where(eq(schema.telegramUserLinks.workspaceMemberPublicId, memberPublicId))
+    .all();
+  return results[0] || null;
+}
+
 // Default Board Config
 export async function getDefaultBoardConfig(telegramChatId: number) {
   const results = db

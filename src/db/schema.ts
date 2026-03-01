@@ -130,3 +130,19 @@ export const namingCeremonies = sqliteTable("naming_ceremonies", {
   concludesAt: integer("concludes_at", { mode: "timestamp" }).notNull(),
   initiatedByUserId: integer("initiated_by_user_id").notNull(),
 });
+
+// Conversation history — one row per chat, tracks last activity for TTL
+export const conversations = sqliteTable("conversations", {
+  telegramChatId: integer("telegram_chat_id").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  lastActivity: integer("last_activity", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+// Individual messages within a conversation
+export const conversationMessages = sqliteTable("conversation_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  telegramChatId: integer("telegram_chat_id").notNull(),
+  role: text("role").notNull(), // "user" | "assistant"
+  content: text("content").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});

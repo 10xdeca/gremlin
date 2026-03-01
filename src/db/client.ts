@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database, { type Database as DatabaseType } from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { mkdirSync } from "fs";
 import { dirname } from "path";
@@ -9,7 +9,7 @@ const dbPath = process.env.DATABASE_PATH || "./data/kan-bot.db";
 // Ensure directory exists
 mkdirSync(dirname(dbPath), { recursive: true });
 
-const sqlite = new Database(dbPath);
+const sqlite: DatabaseType = new Database(dbPath);
 export const db = drizzle(sqlite, { schema });
 
 // Initialize tables
@@ -124,6 +124,20 @@ sqlite.exec(`
     sent_at INTEGER NOT NULL,
     UNIQUE(event_uid, telegram_chat_id, reminder_window)
   );
+
+  CREATE TABLE IF NOT EXISTS conversations (
+    telegram_chat_id INTEGER PRIMARY KEY,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    last_activity INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE TABLE IF NOT EXISTS conversation_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
 `);
 
 // Migration: Add reminder_type column to existing databases
@@ -233,4 +247,11 @@ try {
   // Column already exists, ignore
 }
 
-export { schema };
+// Migration: Add index on conversation_messages for chat lookups
+try {
+  sqlite.exec(`CREATE INDEX idx_conv_messages_chat ON conversation_messages(telegram_chat_id, created_at)`);
+} catch {
+  // Index already exists, ignore
+}
+
+export { schema, sqlite };
