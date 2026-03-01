@@ -114,11 +114,10 @@ export async function runAgentLoop(
     if (toolUseBlocks.length === 0) {
       // No tool calls — extract final text and return
       const text = extractText(response.content);
-      const assistantMessage: Anthropic.Messages.MessageParam = {
-        role: "assistant",
-        content: text,
-      };
-      appendToHistory(input.chatId, userMessage, assistantMessage);
+      // Capture the full turn: everything added since history ended
+      const turnMessages = messages.slice(history.length);
+      turnMessages.push({ role: "assistant", content: text });
+      appendToHistory(input.chatId, turnMessages);
       return text;
     }
 
@@ -158,14 +157,14 @@ export async function runAgentLoop(
     messages.push({ role: "user", content: toolResults });
   }
 
-  // Exhausted tool rounds — return whatever text we have
+  // Exhausted tool rounds — cap with text-only assistant message.
+  // Don't store unfulfilled tool_use blocks from response — they'd lack matching tool_results.
   const fallbackText = extractText(response!.content);
-  const assistantMessage: Anthropic.Messages.MessageParam = {
-    role: "assistant",
-    content: fallbackText || "I ran into too many steps trying to complete that. Could you try a simpler request?",
-  };
-  appendToHistory(input.chatId, userMessage, assistantMessage);
-  return assistantMessage.content as string;
+  const cappingText = fallbackText || "I ran into too many steps trying to complete that. Could you try a simpler request?";
+  const turnMessages = messages.slice(history.length);
+  turnMessages.push({ role: "assistant", content: cappingText });
+  appendToHistory(input.chatId, turnMessages);
+  return cappingText;
 }
 
 /** Extract text content from Claude response blocks. */
