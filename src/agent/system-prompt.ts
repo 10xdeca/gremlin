@@ -33,7 +33,6 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   );
 
   // Context
-  parts.push("## Current Context");
   if (ctx.userId === 0) {
     // System-initiated (scheduled reminders)
     parts.push(`## System-Initiated Reminder`);

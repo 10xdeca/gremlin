@@ -298,6 +298,7 @@ async function composeViaAgent(
 
 /**
  * Send an agent-composed message to Telegram with Markdown, falling back to plain text.
+ * Handles unreachable chats (deleted/blocked) so callers don't need to retry.
  */
 async function sendAgentMessage(
   bot: Bot,
@@ -312,6 +313,7 @@ async function sendAgentMessage(
   try {
     await bot.api.sendMessage(chatId, message, { parse_mode: "Markdown", ...opts });
   } catch (err: unknown) {
+    if (await handleUnreachableChat(err, chatId)) return;
     const isParseError = err instanceof Error && err.message.includes("can't parse entities");
     if (isParseError) {
       console.warn("Markdown parse failed for agent reminder, falling back to plain text");
