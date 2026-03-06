@@ -22,6 +22,8 @@ interface AgentInput {
   messageThreadId?: number;
   replyToText?: string;
   replyToUsername?: string;
+  /** When true, the agent composes a message without tool access (used for scheduled reminders). */
+  isSystemInitiated?: boolean;
 }
 
 /**
@@ -54,7 +56,7 @@ export async function runAgentLoop(
     return "I'm having trouble with my brain connection right now. The team has been notified.";
   }
 
-  const tools = getAnthropicTools();
+  const tools = input.isSystemInitiated ? [] : getAnthropicTools();
   const systemPrompt = await buildSystemPrompt({
     chatId: input.chatId,
     userId: input.userId,
@@ -88,7 +90,7 @@ export async function runAgentLoop(
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
-        tools,
+        ...(tools.length > 0 ? { tools } : {}),
         messages,
       });
     } catch (err) {

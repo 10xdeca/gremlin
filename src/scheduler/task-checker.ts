@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import type { Bot } from "grammy";
+import { runAgentLoop } from "../agent/agent-loop.js";
 import { mcpManager } from "../agent/mcp-manager.js";
 import {
   getAllWorkspaceLinks,
@@ -275,6 +276,52 @@ function formatDueDate(dueDate: string | null): string {
   return dateStr;
 }
 
+/**
+ * Compose a reminder message via the agent loop so it lands in conversation history.
+ * Uses userId: 0 as a system sentinel and disables tools for fast single-round execution.
+ */
+async function composeViaAgent(
+  bot: Bot,
+  chatId: number,
+  prompt: string,
+  messageThreadId?: number | null,
+): Promise<string> {
+  return await runAgentLoop(bot.api, {
+    text: prompt,
+    chatId,
+    userId: 0,
+    isAdmin: true,
+    isSystemInitiated: true,
+    ...(messageThreadId ? { messageThreadId } : {}),
+  });
+}
+
+/**
+ * Send an agent-composed message to Telegram with Markdown, falling back to plain text.
+ */
+async function sendAgentMessage(
+  bot: Bot,
+  chatId: number,
+  message: string,
+  messageThreadId?: number | null,
+): Promise<void> {
+  const opts = {
+    link_preview_options: { is_disabled: true } as const,
+    ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+  };
+  try {
+    await bot.api.sendMessage(chatId, message, { parse_mode: "Markdown", ...opts });
+  } catch (err: unknown) {
+    const isParseError = err instanceof Error && err.message.includes("can't parse entities");
+    if (isParseError) {
+      console.warn("Markdown parse failed for agent reminder, falling back to plain text");
+      await bot.api.sendMessage(chatId, message, opts);
+    } else {
+      throw err;
+    }
+  }
+}
+
 // --- Overdue ---
 
 async function checkOverdueTasks(
@@ -299,13 +346,32 @@ async function checkOverdueTasks(
           const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
           const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
 
-          let message = `Task overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}\\!\n\n`;
-          message += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
-          message += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
-          message += `Due: ${escapeMarkdown(formatDueDate(card.dueDate))}\n\n`;
-          if (mentions) message += `${mentions} `;
+          const prompt = [
+            `[SCHEDULED REMINDER — overdue task]`,
+            ``,
+            `Task overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}:`,
+            `- "${card.title}" — ${cardUrl}`,
+            `  Board: ${board.name} (${boardUrl}) > ${list.name}`,
+            `  Due: ${formatDueDate(card.dueDate)}`,
+            mentions ? `  Assigned to: ${mentions}` : `  No assignee`,
+            ``,
+            `Notify the chat about this overdue task.`,
+          ].join("\n");
 
-          await sendReminderMessage(bot, workspaceLink.telegramChatId, card.publicId, "overdue", message, card.title, workspaceLink.messageThreadId);
+          try {
+            const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, prompt, workspaceLink.messageThreadId);
+            await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
+            await upsertReminder(card.publicId, workspaceLink.telegramChatId, "overdue");
+            console.log(`Sent overdue reminder for "${card.title}" to chat ${workspaceLink.telegramChatId}`);
+          } catch (error) {
+            console.warn(`Agent composition failed for overdue reminder, falling back to direct send:`, error);
+            let message = `Task overdue by ${daysOverdue} day${daysOverdue === 1 ? "" : "s"}\\!\n\n`;
+            message += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
+            message += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
+            message += `Due: ${escapeMarkdown(formatDueDate(card.dueDate))}\n\n`;
+            if (mentions) message += `${mentions} `;
+            await sendReminderMessage(bot, workspaceLink.telegramChatId, card.publicId, "overdue", message, card.title, workspaceLink.messageThreadId);
+          }
         }
       }
     }
@@ -339,28 +405,54 @@ async function checkNoDueDates(
 
     if (tasksToRemind.length === 0) return;
 
-    let message = `📅 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} a due date\n\n`;
-    message += tasksToRemind.map((item, i) => {
+    const promptLines = [
+      `[SCHEDULED REMINDER — tasks without due dates]`,
+      ``,
+      `The following ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " has" : "s have"} no due date:`,
+      ``,
+    ];
+    for (const [i, item] of tasksToRemind.entries()) {
       const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
       const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
       const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
-      let line = `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
-      if (mentions) line += `\n   ${mentions}`;
-      return line;
-    }).join("\n\n");
+      promptLines.push(`${i + 1}. "${item.card.title}" — ${cardUrl}`);
+      promptLines.push(`   Board: ${item.board.name} (${boardUrl}) > ${item.list.name}`);
+      if (mentions) promptLines.push(`   Assigned to: ${mentions}`);
+    }
+    promptLines.push(``, `Notify the chat about these tasks needing due dates.`);
 
     try {
-      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
-        parse_mode: "MarkdownV2",
-        link_preview_options: { is_disabled: true },
-        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
-      });
+      const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, promptLines.join("\n"), workspaceLink.messageThreadId);
+      await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
       for (const { card } of tasksToRemind) {
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date");
       }
-    } catch (error) {
-      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
-      console.error(`Failed to send no-due-date reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      console.log(`Sent no-due-date reminder for ${tasksToRemind.length} task(s) to chat ${workspaceLink.telegramChatId}`);
+    } catch (agentError) {
+      console.warn(`Agent composition failed for no-due-date reminder, falling back to direct send:`, agentError);
+      let message = `📅 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} a due date\n\n`;
+      message += tasksToRemind.map((item, i) => {
+        const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+        const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+        const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
+        let line = `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+        if (mentions) line += `\n   ${mentions}`;
+        return line;
+      }).join("\n\n");
+
+      try {
+        await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+          parse_mode: "MarkdownV2",
+          link_preview_options: { is_disabled: true },
+          ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+        });
+        for (const { card } of tasksToRemind) {
+          await upsertReminder(card.publicId, workspaceLink.telegramChatId, "no_due_date");
+        }
+      } catch (error) {
+        if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
+        console.error(`Failed to send no-due-date reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      }
     }
   } catch (error) {
     console.error(`Error checking no-due-date tasks for workspace ${workspaceLink.workspaceName}:`, error);
@@ -405,29 +497,56 @@ async function checkVagueTasks(
 
     if (tasksToRemind.length === 0) return;
 
-    let message = `📝 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} more detail\n\n`;
-    message += tasksToRemind.map((item, i) => {
+    const promptLines = [
+      `[SCHEDULED REMINDER — tasks needing more detail]`,
+      ``,
+      `The following ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " is" : "s are"} too vague:`,
+      ``,
+    ];
+    for (const [i, item] of tasksToRemind.entries()) {
       const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
       const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
       const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
-      let line = `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
-      if (item.reason) line += `\n   _${escapeMarkdown(item.reason)}_`;
-      if (mentions) line += `\n   ${mentions}`;
-      return line;
-    }).join("\n\n");
+      promptLines.push(`${i + 1}. "${item.card.title}" — ${cardUrl}`);
+      promptLines.push(`   Board: ${item.board.name} (${boardUrl}) > ${item.list.name}`);
+      if (item.reason) promptLines.push(`   Issue: ${item.reason}`);
+      if (mentions) promptLines.push(`   Assigned to: ${mentions}`);
+    }
+    promptLines.push(``, `Notify the chat that these tasks need better descriptions or acceptance criteria.`);
 
     try {
-      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
-        parse_mode: "MarkdownV2",
-        link_preview_options: { is_disabled: true },
-        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
-      });
+      const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, promptLines.join("\n"), workspaceLink.messageThreadId);
+      await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
       for (const { card } of tasksToRemind) {
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "vague");
       }
-    } catch (error) {
-      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
-      console.error(`Failed to send vague task reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      console.log(`Sent vague task reminder for ${tasksToRemind.length} task(s) to chat ${workspaceLink.telegramChatId}`);
+    } catch (agentError) {
+      console.warn(`Agent composition failed for vague task reminder, falling back to direct send:`, agentError);
+      let message = `📝 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} more detail\n\n`;
+      message += tasksToRemind.map((item, i) => {
+        const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+        const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+        const mentions = item.assigneeUsernames.map((u) => `@${u}`).join(" ");
+        let line = `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+        if (item.reason) line += `\n   _${escapeMarkdown(item.reason)}_`;
+        if (mentions) line += `\n   ${mentions}`;
+        return line;
+      }).join("\n\n");
+
+      try {
+        await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+          parse_mode: "MarkdownV2",
+          link_preview_options: { is_disabled: true },
+          ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+        });
+        for (const { card } of tasksToRemind) {
+          await upsertReminder(card.publicId, workspaceLink.telegramChatId, "vague");
+        }
+      } catch (error) {
+        if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
+        console.error(`Failed to send vague task reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      }
     }
   } catch (error) {
     console.error(`Error checking vague tasks for workspace ${workspaceLink.workspaceName}:`, error);
@@ -467,13 +586,31 @@ async function checkStaleTasks(
           const cardUrl = `${KAN_BASE_URL}/cards/${card.publicId}`;
           const boardUrl = `${KAN_BASE_URL}/boards/${board.publicId}`;
 
-          let message = `⏰ Task stuck in progress\n\n`;
-          message += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
-          message += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
-          message += `In progress for ${daysStale} day${daysStale === 1 ? "" : "s"}\n\n`;
-          message += mentions ? `${mentions}, need help unblocking this\\?\n\n` : `This task may be blocked\\.\n\n`;
+          const prompt = [
+            `[SCHEDULED REMINDER — stale task]`,
+            ``,
+            `This task has been in progress for ${daysStale} day${daysStale === 1 ? "" : "s"} without updates:`,
+            `- "${card.title}" — ${cardUrl}`,
+            `  Board: ${board.name} (${boardUrl}) > ${list.name}`,
+            mentions ? `  Assigned to: ${mentions}` : `  No assignee`,
+            ``,
+            `Nudge the chat about this potentially stuck task. Ask if they need help unblocking it.`,
+          ].join("\n");
 
-          await sendReminderMessage(bot, workspaceLink.telegramChatId, card.publicId, "stale", message, card.title, workspaceLink.messageThreadId);
+          try {
+            const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, prompt, workspaceLink.messageThreadId);
+            await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
+            await upsertReminder(card.publicId, workspaceLink.telegramChatId, "stale");
+            console.log(`Sent stale reminder for "${card.title}" to chat ${workspaceLink.telegramChatId}`);
+          } catch (error) {
+            console.warn(`Agent composition failed for stale reminder, falling back to direct send:`, error);
+            let message = `⏰ Task stuck in progress\n\n`;
+            message += `[${escapeMarkdown(card.title)}](${cardUrl})\n`;
+            message += `[${escapeMarkdown(board.name)}](${boardUrl}) › ${escapeMarkdown(list.name)}\n`;
+            message += `In progress for ${daysStale} day${daysStale === 1 ? "" : "s"}\n\n`;
+            message += mentions ? `${mentions}, need help unblocking this\\?\n\n` : `This task may be blocked\\.\n\n`;
+            await sendReminderMessage(bot, workspaceLink.telegramChatId, card.publicId, "stale", message, card.title, workspaceLink.messageThreadId);
+          }
         }
       }
     }
@@ -506,25 +643,49 @@ async function checkUnassignedTasks(
 
     if (tasksToRemind.length === 0) return;
 
-    let message = `👤 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} an owner\n\n`;
-    message += tasksToRemind.map((item, i) => {
+    const promptLines = [
+      `[SCHEDULED REMINDER — unassigned tasks]`,
+      ``,
+      `The following ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " has" : "s have"} no assignee:`,
+      ``,
+    ];
+    for (const [i, item] of tasksToRemind.entries()) {
       const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
       const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
-      return `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
-    }).join("\n\n");
+      promptLines.push(`${i + 1}. "${item.card.title}" — ${cardUrl}`);
+      promptLines.push(`   Board: ${item.board.name} (${boardUrl}) > ${item.list.name}`);
+    }
+    promptLines.push(``, `Notify the chat about these unassigned tasks.`);
 
     try {
-      await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
-        parse_mode: "MarkdownV2",
-        link_preview_options: { is_disabled: true },
-        ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
-      });
+      const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, promptLines.join("\n"), workspaceLink.messageThreadId);
+      await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
       for (const { card } of tasksToRemind) {
         await upsertReminder(card.publicId, workspaceLink.telegramChatId, "unassigned");
       }
-    } catch (error) {
-      if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
-      console.error(`Failed to send unassigned reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      console.log(`Sent unassigned reminder for ${tasksToRemind.length} task(s) to chat ${workspaceLink.telegramChatId}`);
+    } catch (agentError) {
+      console.warn(`Agent composition failed for unassigned reminder, falling back to direct send:`, agentError);
+      let message = `👤 ${tasksToRemind.length} task${tasksToRemind.length === 1 ? " needs" : "s need"} an owner\n\n`;
+      message += tasksToRemind.map((item, i) => {
+        const cardUrl = `${KAN_BASE_URL}/cards/${item.card.publicId}`;
+        const boardUrl = `${KAN_BASE_URL}/boards/${item.board.publicId}`;
+        return `${i + 1}\\. [${escapeMarkdown(item.card.title)}](${cardUrl})\n   [${escapeMarkdown(item.board.name)}](${boardUrl}) › ${escapeMarkdown(item.list.name)}`;
+      }).join("\n\n");
+
+      try {
+        await bot.api.sendMessage(workspaceLink.telegramChatId, message, {
+          parse_mode: "MarkdownV2",
+          link_preview_options: { is_disabled: true },
+          ...(workspaceLink.messageThreadId ? { message_thread_id: workspaceLink.messageThreadId } : {}),
+        });
+        for (const { card } of tasksToRemind) {
+          await upsertReminder(card.publicId, workspaceLink.telegramChatId, "unassigned");
+        }
+      } catch (error) {
+        if (await handleUnreachableChat(error, workspaceLink.telegramChatId)) return;
+        console.error(`Failed to send unassigned reminder to chat ${workspaceLink.telegramChatId}:`, error);
+      }
     }
   } catch (error) {
     console.error(`Error checking unassigned tasks for workspace ${workspaceLink.workspaceName}:`, error);
@@ -572,12 +733,28 @@ async function checkNoTasks(
       const mention = `@${userLink.telegramUsername}`;
       const url = `${KAN_BASE_URL}/${workspaceSlug}`;
 
-      let message = `📋 No tasks for the sprint\\?\n\n`;
-      message += `${mention}, you don't have any tasks assigned\\.\n`;
-      message += `Add your work to the board so we can track it\\!\n\n`;
-      message += `[Open workspace](${url})`;
+      const prompt = [
+        `[SCHEDULED REMINDER — team member with no tasks]`,
+        ``,
+        `${mention} has no tasks assigned for the current sprint.`,
+        `Workspace: ${url}`,
+        ``,
+        `Nudge them to add their work to the board.`,
+      ].join("\n");
 
-      await sendReminderMessage(bot, workspaceLink.telegramChatId, syntheticId, "no_tasks", message, `no tasks for ${member.email}`, workspaceLink.messageThreadId);
+      try {
+        const agentMessage = await composeViaAgent(bot, workspaceLink.telegramChatId, prompt, workspaceLink.messageThreadId);
+        await sendAgentMessage(bot, workspaceLink.telegramChatId, agentMessage, workspaceLink.messageThreadId);
+        await upsertReminder(syntheticId, workspaceLink.telegramChatId, "no_tasks");
+        console.log(`Sent no-tasks reminder for ${member.email} to chat ${workspaceLink.telegramChatId}`);
+      } catch (error) {
+        console.warn(`Agent composition failed for no-tasks reminder, falling back to direct send:`, error);
+        let message = `📋 No tasks for the sprint\\?\n\n`;
+        message += `${mention}, you don't have any tasks assigned\\.\n`;
+        message += `Add your work to the board so we can track it\\!\n\n`;
+        message += `[Open workspace](${url})`;
+        await sendReminderMessage(bot, workspaceLink.telegramChatId, syntheticId, "no_tasks", message, `no tasks for ${member.email}`, workspaceLink.messageThreadId);
+      }
     }
   } catch (error) {
     console.error(`Error checking members with no tasks for workspace ${workspaceLink.workspaceName}:`, error);

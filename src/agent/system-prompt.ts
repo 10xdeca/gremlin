@@ -34,7 +34,18 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
 
   // Context
   parts.push("## Current Context");
-  parts.push(`- Requesting user: @${ctx.username || "unknown"} (user ID: ${ctx.userId}) — ${ctx.isAdmin ? "ADMIN" : "member"}`);
+  if (ctx.userId === 0) {
+    // System-initiated (scheduled reminders)
+    parts.push(`## System-Initiated Reminder`);
+    parts.push(`This is a scheduled reminder check — you are composing a message to post to the chat, not replying to a user.`);
+    parts.push(`- Compose a concise, in-character reminder based on the task data below.`);
+    parts.push(`- Preserve @username mentions exactly as written (Telegram resolves them).`);
+    parts.push(`- Include card/board links as provided.`);
+    parts.push(`- Use Telegram Markdown formatting (bold with *text*, links with [text](url)).`);
+    parts.push(`- Keep it brief — this is a nudge, not a report.`);
+  } else {
+    parts.push(`- Requesting user: @${ctx.username || "unknown"} (user ID: ${ctx.userId}) — ${ctx.isAdmin ? "ADMIN" : "member"}`);
+  }
   parts.push(`- Sprint day: ${sprint.day}/14${sprint.isPlanningWindow ? " (PLANNING WINDOW — days 1-2)" : ""}${sprint.isBreak ? " (break day)" : ""}`);
   parts.push("");
 
