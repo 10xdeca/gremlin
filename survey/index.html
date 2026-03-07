@@ -93,6 +93,17 @@
       color: var(--accent);
       font-weight: 600;
     }
+    .user-btn.done {
+      opacity: 0.4;
+      border-style: dashed;
+    }
+    .user-btn.done::after {
+      content: ' ✓';
+      opacity: 0.7;
+    }
+    .user-btn.done.selected {
+      opacity: 1;
+    }
 
     /* Sections */
     .section {
@@ -499,6 +510,7 @@
       { name: 'Angie', id: 'angie' },
       { name: 'Code-Mary', id: 'code-mary' },
       { name: 'Delia', id: 'delia' },
+      { name: 'Jake', id: 'jake' },
       { name: 'Nick', id: 'nick' },
       { name: 'Robin', id: 'robin' },
       { name: 'Seray', id: 'seray' },
@@ -510,12 +522,22 @@
 
     // Build user grid
     const grid = document.getElementById('userGrid');
+    const userBtns = new Map();
     TEAM.forEach(u => {
       const btn = document.createElement('button');
       btn.className = 'user-btn';
       btn.textContent = u.name;
       btn.addEventListener('click', () => selectUser(u, btn));
       grid.appendChild(btn);
+      userBtns.set(u.id, btn);
+    });
+
+    // Check which users have already submitted
+    TEAM.forEach(u => {
+      fetch(`/api/responses/${u.id}?name=${encodeURIComponent(u.name)}`)
+        .then(r => r.json())
+        .then(data => { if (data.exists) userBtns.get(u.id)?.classList.add('done'); })
+        .catch(() => {});
     });
 
     function selectUser(user, btn) {
@@ -592,6 +614,7 @@
           msg.className = 'submit-msg success';
           msg.textContent = 'Thanks! Your response has been saved.';
           document.getElementById('alreadySubmitted').style.display = 'block';
+          userBtns.get(selectedUser.id)?.classList.add('done');
         } else {
           throw new Error('Server error');
         }
