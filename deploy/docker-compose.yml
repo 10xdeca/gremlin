@@ -23,5 +23,21 @@ services:
       - xdeca_pm_bot_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
 
+  survey:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+      args:
+        INSTALL_PLAYWRIGHT: "false"
+    container_name: xdeca-survey
+    restart: unless-stopped
+    ports:
+      - "3737:3737"
+    environment:
+      - SURVEY_PORT=3737
+      - OUTLINE_API_KEY=${OUTLINE_API_KEY:-}
+      - OUTLINE_BASE_URL=${OUTLINE_BASE_URL:-https://kb.xdeca.com/api}
+    command: ["npx", "tsx", "survey/server.ts"]
+
 volumes:
   xdeca_pm_bot_data:

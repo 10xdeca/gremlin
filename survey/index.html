@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xdeca Meta-Sprint Review</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-hover: #222632;
+      --border: #2a2e3a;
+      --text: #e4e4e7;
+      --text-muted: #8b8d98;
+      --accent: #42DED1;
+      --accent-dim: rgba(66, 222, 209, 0.1);
+      --accent-hover: #38c9bd;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* User selector */
+    .user-select {
+      margin-bottom: 2.5rem;
+    }
+
+    .user-select label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      font-size: 1rem;
+    }
+
+    .user-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .user-btn {
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .user-btn:hover { background: var(--surface-hover); border-color: var(--accent); }
+    .user-btn.selected {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Sections */
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-number {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .section-header h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .section-header .section-time {
+      margin-left: auto;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    /* Questions */
+    .question {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .question h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .question .subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: -0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Radio options */
+    .options { display: flex; flex-direction: column; gap: 0.4rem; }
+
+    .option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      font-size: 0.9rem;
+    }
+
+    .option:hover { background: var(--surface-hover); }
+
+    .option input[type="radio"] {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 1px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .option input[type="radio"]:checked {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .option input[type="radio"]:checked::after {
+      content: '';
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: var(--bg);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Scale (1-5) */
+    .scale-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .scale-btn {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .scale-btn:hover { border-color: var(--accent); }
+    .scale-btn.selected {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .scale-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Textareas */
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: vertical;
+      transition: border-color 0.15s ease;
+    }
+
+    textarea:focus { outline: none; border-color: var(--accent); }
+    textarea::placeholder { color: var(--text-muted); }
+
+    /* Follow-up (conditional) */
+    .followup {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .followup label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    /* Submit */
+    .submit-area {
+      text-align: center;
+      padding-top: 1rem;
+    }
+
+    .submit-btn {
+      padding: 0.85rem 2.5rem;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .submit-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .submit-msg {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .submit-msg.success { color: var(--accent); }
+    .submit-msg.error { color: var(--danger); }
+
+    /* Already submitted banner */
+    .already-submitted {
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      color: var(--accent);
+      display: none;
+    }
+
+    /* Survey hidden until user selected */
+    #survey { display: none; }
+    #survey.visible { display: block; }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .container { padding: 1.25rem 1rem 3rem; }
+      header h1 { font-size: 1.4rem; }
+      .user-grid { grid-template-columns: repeat(2, 1fr); }
+      .scale-btn { padding: 0.5rem 0.25rem; font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Meta-Sprint Review</h1>
+      <p>Help us improve our tools and processes. Takes about 5 minutes.</p>
+    </header>
+
+    <div class="user-select">
+      <label>Who are you?</label>
+      <div class="user-grid" id="userGrid"></div>
+    </div>
+
+    <div class="already-submitted" id="alreadySubmitted">
+      You've already submitted a response. You can update it by submitting again.
+    </div>
+
+    <div id="survey">
+
+      <!-- SECTION 1: Tools -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-number">1</div>
+          <h2>Tool Adoption</h2>
+        </div>
+
+        <!-- Kan -->
+        <div class="question">
+          <h3>Kan (Task Board)</h3>
+          <p class="subtitle">Our Kanban board for tracking sprint work</p>
+          <div class="options">
+            <label class="option"><input type="radio" name="kan" value="regular"> I use it regularly to track and manage my work</label>
+            <label class="option"><input type="radio" name="kan" value="read_only"> I'm aware of it but don't interact with it — I do read the board though</label>
+            <label class="option"><input type="radio" name="kan" value="aware_unused"> I'm aware of it but don't look at it</label>
+            <label class="option"><input type="radio" name="kan" value="unaware"> I didn't know we had this</label>
+          </div>
+          <div class="followup">
+            <label>Anything to add about Kan? What works, what doesn't, what would make it useful?</label>
+            <textarea name="kan_comment" placeholder="Optional"></textarea>
+          </div>
+        </div>
+
+        <!-- Outline -->
+        <div class="question">
+          <h3>Outline (Knowledge Base)</h3>
+          <p class="subtitle">Our wiki for docs, decisions, and project info</p>
+          <div class="options">
+            <label class="option"><input type="radio" name="outline" value="regular"> I use it regularly — reading and/or writing docs</label>
+            <label class="option"><input type="radio" name="outline" value="read_only"> I'm aware of it but don't interact — I do read the posts</label>
+            <label class="option"><input type="radio" name="outline" value="aware_unused"> I'm aware of it but don't read any of the posts</label>
+            <label class="option"><input type="radio" name="outline" value="unaware"> I didn't know we had this</label>
+          </div>
+          <div class="followup">
+            <label>Anything to add about Outline? Easy to find info? Anything missing?</label>
+            <textarea name="outline_comment" placeholder="Optional"></textarea>
+          </div>
+        </div>
+
+        <!-- Radicale -->
+        <div class="question">
+          <h3>Radicale (Shared Calendar)</h3>
+          <p class="subtitle">Our shared calendar for events, deadlines, and meetings</p>
+          <div class="options">
+            <label class="option"><input type="radio" name="radicale" value="regular"> I use it regularly — I check it and/or add events</label>
+            <label class="option"><input type="radio" name="radicale" value="read_only"> I'm aware of it but don't interact — I do check it occasionally</label>
+            <label class="option"><input type="radio" name="radicale" value="aware_unused"> I'm aware of it but don't use it</label>
+            <label class="option"><input type="radio" name="radicale" value="unaware"> I didn't know we had this</label>
+          </div>
+          <div class="followup">
+            <label>Anything to add about the calendar?</label>
+            <textarea name="radicale_comment" placeholder="Optional"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: Gremlin -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-number">2</div>
+          <h2>Gremlin (Sprint Bot)</h2>
+        </div>
+
+        <div class="question">
+          <h3>How would you describe your relationship with Gremlin?</h3>
+          <div class="options">
+            <label class="option"><input type="radio" name="gremlin_usage" value="regular"> I use it regularly — I ask it questions or give it tasks</label>
+            <label class="option"><input type="radio" name="gremlin_usage" value="read_only"> I'm aware of it but don't interact — I do read its messages in the group</label>
+            <label class="option"><input type="radio" name="gremlin_usage" value="aware_unused"> I'm aware of it but don't read any of its messages</label>
+            <label class="option"><input type="radio" name="gremlin_usage" value="unaware"> I didn't know we had this</label>
+          </div>
+        </div>
+
+        <div class="question">
+          <h3>How helpful do you find Gremlin?</h3>
+          <div class="scale-row" id="gremlinScale">
+            <button class="scale-btn" data-value="1">1</button>
+            <button class="scale-btn" data-value="2">2</button>
+            <button class="scale-btn" data-value="3">3</button>
+            <button class="scale-btn" data-value="4">4</button>
+            <button class="scale-btn" data-value="5">5</button>
+          </div>
+          <div class="scale-labels">
+            <span>Not helpful</span>
+            <span>Neutral</span>
+            <span>Genuinely helpful</span>
+          </div>
+        </div>
+
+        <div class="question">
+          <h3>What would make Gremlin more useful to you?</h3>
+          <p class="subtitle">Different reminders? Better summaries? Less/more frequent? Different tone?</p>
+          <textarea name="gremlin_improvement" placeholder="Optional"></textarea>
+        </div>
+      </div>
+
+      <!-- SECTION 3: Sprint Process -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-number">3</div>
+          <h2>Sprint Process</h2>
+        </div>
+
+        <div class="question">
+          <h3>Does the current sprint length feel right?</h3>
+          <div class="options">
+            <label class="option"><input type="radio" name="sprint_length" value="too_short"> Too short — I barely get started</label>
+            <label class="option"><input type="radio" name="sprint_length" value="about_right"> About right</label>
+            <label class="option"><input type="radio" name="sprint_length" value="too_long"> Too long — I lose focus or momentum</label>
+          </div>
+        </div>
+
+        <div class="question">
+          <h3>Are the current sprint ceremonies useful to you?</h3>
+          <p class="subtitle">Planning, review, retro</p>
+          <div class="options">
+            <label class="option"><input type="radio" name="ceremonies" value="useful"> Yes, they help me stay aligned</label>
+            <label class="option"><input type="radio" name="ceremonies" value="mixed"> Some are useful, some aren't</label>
+            <label class="option"><input type="radio" name="ceremonies" value="not_useful"> Not really — I'd prefer a different approach</label>
+          </div>
+          <div class="followup">
+            <label>Any detail on which ceremonies work or don't?</label>
+            <textarea name="ceremonies_comment" placeholder="Optional"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 4: Open Floor -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-number">4</div>
+          <h2>Open Floor</h2>
+        </div>
+
+        <div class="question">
+          <h3>If you could change one thing about how we manage sprints or projects, what would it be?</h3>
+          <textarea name="one_change" placeholder="Optional"></textarea>
+        </div>
+
+        <div class="question">
+          <h3>Anything else you want us to know?</h3>
+          <p class="subtitle">About the tools, the process, or how you're finding things in general</p>
+          <textarea name="anything_else" placeholder="Optional"></textarea>
+        </div>
+      </div>
+
+      <div class="submit-area">
+        <button class="submit-btn" id="submitBtn" disabled>Submit Response</button>
+        <div class="submit-msg" id="submitMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TEAM = [
+      { name: 'Alexar', id: 'alexar' },
+      { name: 'Angie', id: 'angie' },
+      { name: 'Code-Mary', id: 'code-mary' },
+      { name: 'Delia', id: 'delia' },
+      { name: 'Nick', id: 'nick' },
+      { name: 'Robin', id: 'robin' },
+      { name: 'Seray', id: 'seray' },
+      { name: 'Sophie', id: 'sophie' },
+    ];
+
+    let selectedUser = null;
+    let gremlinHelpfulness = null;
+
+    // Build user grid
+    const grid = document.getElementById('userGrid');
+    TEAM.forEach(u => {
+      const btn = document.createElement('button');
+      btn.className = 'user-btn';
+      btn.textContent = u.name;
+      btn.addEventListener('click', () => selectUser(u, btn));
+      grid.appendChild(btn);
+    });
+
+    function selectUser(user, btn) {
+      selectedUser = user;
+      document.querySelectorAll('.user-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('survey').classList.add('visible');
+      document.getElementById('submitBtn').disabled = false;
+
+      // Check if already submitted
+      fetch(`/api/responses/${user.id}?name=${encodeURIComponent(user.name)}`)
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('alreadySubmitted').style.display = data.exists ? 'block' : 'none';
+        })
+        .catch(() => {});
+    }
+
+    // Scale buttons
+    document.querySelectorAll('#gremlinScale .scale-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        gremlinHelpfulness = parseInt(btn.dataset.value);
+        document.querySelectorAll('#gremlinScale .scale-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+
+    // Submit
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      if (!selectedUser) return;
+
+      const getRadio = name => {
+        const el = document.querySelector(`input[name="${name}"]:checked`);
+        return el ? el.value : null;
+      };
+      const getText = name => {
+        const el = document.querySelector(`textarea[name="${name}"]`);
+        return el ? el.value.trim() : '';
+      };
+
+      const payload = {
+        user_id: selectedUser.id,
+        user_name: selectedUser.name,
+        submitted_at: new Date().toISOString(),
+        kan: getRadio('kan'),
+        kan_comment: getText('kan_comment'),
+        outline: getRadio('outline'),
+        outline_comment: getText('outline_comment'),
+        radicale: getRadio('radicale'),
+        radicale_comment: getText('radicale_comment'),
+        gremlin_usage: getRadio('gremlin_usage'),
+        gremlin_helpfulness: gremlinHelpfulness,
+        gremlin_improvement: getText('gremlin_improvement'),
+        sprint_length: getRadio('sprint_length'),
+        ceremonies: getRadio('ceremonies'),
+        ceremonies_comment: getText('ceremonies_comment'),
+        one_change: getText('one_change'),
+        anything_else: getText('anything_else'),
+      };
+
+      const btn = document.getElementById('submitBtn');
+      const msg = document.getElementById('submitMsg');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        const res = await fetch('/api/responses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          msg.className = 'submit-msg success';
+          msg.textContent = 'Thanks! Your response has been saved.';
+          document.getElementById('alreadySubmitted').style.display = 'block';
+        } else {
+          throw new Error('Server error');
+        }
+      } catch (e) {
+        msg.className = 'submit-msg error';
+        msg.textContent = 'Something went wrong. Please try again.';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Submit Response';
+    });
+  </script>
+</body>
+</html>
