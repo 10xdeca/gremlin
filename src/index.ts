@@ -7,7 +7,7 @@ import "./db/client.js";
 
 // Agent infrastructure
 import { mcpManager } from "./agent/mcp-manager.js";
-import { runAgentLoop } from "./agent/agent-loop.js";
+import { runAgentLoop, type ImageAttachment } from "./agent/agent-loop.js";
 import { getWorkspaceLink } from "./db/queries.js";
 
 // Custom tool registration
@@ -182,6 +182,188 @@ bot.on("message:text", async (ctx) => {
   } catch (error) {
     console.error("Agent loop error:", error);
     await ctx.reply("Something went wrong processing your message. Please try again.");
+  }
+});
+
+// --- Photo message handler (image vision) ---
+
+const TELEGRAM_FILE_URL = `https://api.telegram.org/file/bot${token}`;
+
+/** Map Telegram MIME types to Claude-supported image media types. */
+function toImageMediaType(mime?: string): ImageAttachment["mediaType"] | null {
+  const map: Record<string, ImageAttachment["mediaType"]> = {
+    "image/jpeg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+  };
+  return (mime ? map[mime] : undefined) ?? null;
+}
+
+/** Download a Telegram file as a base64 string. */
+async function downloadTelegramFile(fileId: string): Promise<{ base64: string; mediaType: ImageAttachment["mediaType"] }> {
+  const file = await bot.api.getFile(fileId);
+  const url = `${TELEGRAM_FILE_URL}/${file.file_path}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to download file: ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  // Infer media type from file extension
+  const ext = file.file_path?.split(".").pop()?.toLowerCase();
+  const mediaType: ImageAttachment["mediaType"] =
+    ext === "png" ? "image/png"
+    : ext === "gif" ? "image/gif"
+    : ext === "webp" ? "image/webp"
+    : "image/jpeg";
+
+  return { base64: buffer.toString("base64"), mediaType };
+}
+
+bot.on("message:photo", async (ctx) => {
+  const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
+  if (!chatId || !userId) return;
+
+  const caption = ctx.message.caption ?? "";
+
+  // Apply same group filtering as text messages
+  if (shouldSkipMessage(
+    caption,
+    chatId,
+    ctx.chat.type,
+    ctx.message?.reply_to_message?.from?.id,
+    ctx.me?.id
+  )) return;
+
+  // Topic filtering for groups
+  if (ctx.chat.type !== "private") {
+    const configuredTopic = await getConfiguredTopicId(chatId);
+    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) {
+      const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+      const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
+      if (!isMentioned && !isReplyToBot) return;
+    }
+    lastAgentCall.set(chatId, Date.now());
+  }
+
+  try {
+    // Get the largest photo (last in the array)
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+
+    const { base64, mediaType } = await downloadTelegramFile(largest.file_id);
+
+    const response = await runAgentLoop(ctx.api, {
+      text: caption || "What do you see in this image?",
+      chatId,
+      userId,
+      username: ctx.from?.username,
+      isAdmin: isAdmin(userId),
+      messageThreadId: ctx.message?.message_thread_id,
+      replyToText: ctx.message?.reply_to_message?.text,
+      replyToUsername: ctx.message?.reply_to_message?.from?.username,
+      images: [{ base64, mediaType }],
+    });
+
+    if (response) {
+      const replyOpts = {
+        link_preview_options: { is_disabled: true } as const,
+        ...(ctx.message?.message_thread_id
+          ? { message_thread_id: ctx.message.message_thread_id }
+          : {}),
+      };
+      try {
+        await ctx.reply(response, { parse_mode: "Markdown", ...replyOpts });
+      } catch (markdownError: unknown) {
+        const isParseError =
+          markdownError instanceof Error &&
+          markdownError.message.includes("can't parse entities");
+        if (isParseError) {
+          console.warn("Markdown parse failed, falling back to plain text");
+          await ctx.reply(response, replyOpts);
+        } else {
+          throw markdownError;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Photo processing error:", error);
+    await ctx.reply("Something went wrong processing your image. Please try again.");
+  }
+});
+
+// --- Document handler for image files ---
+
+bot.on("message:document", async (ctx) => {
+  const chatId = ctx.chat?.id;
+  const userId = ctx.from?.id;
+  const doc = ctx.message.document;
+  if (!chatId || !userId || !doc) return;
+
+  // Only process image documents
+  const mediaType = toImageMediaType(doc.mime_type);
+  if (!mediaType) return;
+
+  const caption = ctx.message.caption ?? "";
+
+  // Apply same group filtering
+  if (shouldSkipMessage(
+    caption,
+    chatId,
+    ctx.chat.type,
+    ctx.message?.reply_to_message?.from?.id,
+    ctx.me?.id
+  )) return;
+
+  if (ctx.chat.type !== "private") {
+    const configuredTopic = await getConfiguredTopicId(chatId);
+    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) {
+      const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+      const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
+      if (!isMentioned && !isReplyToBot) return;
+    }
+    lastAgentCall.set(chatId, Date.now());
+  }
+
+  try {
+    const { base64 } = await downloadTelegramFile(doc.file_id);
+
+    const response = await runAgentLoop(ctx.api, {
+      text: caption || "What do you see in this image?",
+      chatId,
+      userId,
+      username: ctx.from?.username,
+      isAdmin: isAdmin(userId),
+      messageThreadId: ctx.message?.message_thread_id,
+      replyToText: ctx.message?.reply_to_message?.text,
+      replyToUsername: ctx.message?.reply_to_message?.from?.username,
+      images: [{ base64, mediaType }],
+    });
+
+    if (response) {
+      const replyOpts = {
+        link_preview_options: { is_disabled: true } as const,
+        ...(ctx.message?.message_thread_id
+          ? { message_thread_id: ctx.message.message_thread_id }
+          : {}),
+      };
+      try {
+        await ctx.reply(response, { parse_mode: "Markdown", ...replyOpts });
+      } catch (markdownError: unknown) {
+        const isParseError =
+          markdownError instanceof Error &&
+          markdownError.message.includes("can't parse entities");
+        if (isParseError) {
+          console.warn("Markdown parse failed, falling back to plain text");
+          await ctx.reply(response, replyOpts);
+        } else {
+          throw markdownError;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Document image processing error:", error);
+    await ctx.reply("Something went wrong processing your image. Please try again.");
   }
 });
 
