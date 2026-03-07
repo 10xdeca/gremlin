@@ -95,7 +95,21 @@ function responseToMarkdown(data: SurveyResponse): string {
     lines.push(`*No additional comments.*`);
   }
 
+  // Embed raw JSON so we can prefill the form on re-edit
+  lines.push(`\n---\n`);
+  lines.push(`<!--survey-data:${JSON.stringify(data)}:survey-data-->`);
+
   return lines.join("\n");
+}
+
+function extractResponseData(docText: string): SurveyResponse | null {
+  const match = docText.match(/<!--survey-data:(.*?):survey-data-->/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 // Outline API helpers
@@ -155,9 +169,8 @@ async function saveResponseToOutline(data: SurveyResponse): Promise<void> {
 async function checkExistingResponse(userId: string, userName: string): Promise<{ exists: boolean; response: SurveyResponse | null }> {
   const doc = await findResponseDoc(userName);
   if (!doc) return { exists: false, response: null };
-  // We can't perfectly reconstruct the structured data from markdown,
-  // so just signal that a response exists
-  return { exists: true, response: null };
+  const response = extractResponseData(doc.text);
+  return { exists: true, response };
 }
 
 const html = readFileSync(HTML_FILE, "utf-8");

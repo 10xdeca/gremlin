@@ -547,13 +547,46 @@
       document.getElementById('survey').classList.add('visible');
       document.getElementById('submitBtn').disabled = false;
 
-      // Check if already submitted
+      // Reset form
+      resetForm();
+
+      // Check if already submitted and prefill
       fetch(`/api/responses/${user.id}?name=${encodeURIComponent(user.name)}`)
         .then(r => r.json())
         .then(data => {
           document.getElementById('alreadySubmitted').style.display = data.exists ? 'block' : 'none';
+          if (data.exists && data.response) prefill(data.response);
         })
         .catch(() => {});
+    }
+
+    function resetForm() {
+      document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+      document.querySelectorAll('textarea').forEach(t => t.value = '');
+      gremlinHelpfulness = null;
+      document.querySelectorAll('#gremlinScale .scale-btn').forEach(b => b.classList.remove('selected'));
+      document.getElementById('submitMsg').textContent = '';
+    }
+
+    function prefill(data) {
+      ['kan', 'outline', 'radicale', 'gremlin_usage', 'sprint_length', 'ceremonies'].forEach(name => {
+        if (data[name]) {
+          const radio = document.querySelector(`input[name="${name}"][value="${data[name]}"]`);
+          if (radio) radio.checked = true;
+        }
+      });
+      ['kan_comment', 'outline_comment', 'radicale_comment', 'gremlin_improvement', 'ceremonies_comment', 'one_change', 'anything_else'].forEach(name => {
+        if (data[name]) {
+          const ta = document.querySelector(`textarea[name="${name}"]`);
+          if (ta) ta.value = data[name];
+        }
+      });
+      if (data.gremlin_helpfulness) {
+        gremlinHelpfulness = data.gremlin_helpfulness;
+        document.querySelectorAll('#gremlinScale .scale-btn').forEach(b => {
+          b.classList.toggle('selected', b.dataset.value === String(data.gremlin_helpfulness));
+        });
+      }
     }
 
     // Scale buttons
