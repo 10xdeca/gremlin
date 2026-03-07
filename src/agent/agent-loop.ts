@@ -13,6 +13,13 @@ const MODEL = "claude-sonnet-4-6";
 const MAX_TOOL_ROUNDS = 10;
 const MAX_TOKENS = 2048;
 
+export interface ImageAttachment {
+  /** Base64-encoded image data. */
+  base64: string;
+  /** MIME type, e.g. "image/jpeg". */
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+}
+
 interface AgentInput {
   text: string;
   chatId: number;
@@ -24,6 +31,8 @@ interface AgentInput {
   replyToUsername?: string;
   /** When true, the agent composes a message without tool access (used for scheduled reminders). */
   isSystemInitiated?: boolean;
+  /** Optional images attached to the message (e.g. Telegram photos). */
+  images?: ImageAttachment[];
 }
 
 /**
@@ -69,9 +78,23 @@ export async function runAgentLoop(
 
   // Build messages: history + current user message
   const history = getHistory(input.chatId);
+  const userContent: Anthropic.Messages.ContentBlockParam[] = [];
+
+  // Add images first so Claude sees them before the text
+  if (input.images?.length) {
+    for (const img of input.images) {
+      userContent.push({
+        type: "image",
+        source: { type: "base64", media_type: img.mediaType, data: img.base64 },
+      });
+    }
+  }
+
+  userContent.push({ type: "text", text: input.text || "(no caption)" });
+
   const userMessage: Anthropic.Messages.MessageParam = {
     role: "user",
-    content: input.text,
+    content: input.images?.length ? userContent : input.text,
   };
   const messages: Anthropic.Messages.MessageParam[] = [...history, userMessage];
 
@@ -117,7 +140,7 @@ export async function runAgentLoop(
       // No tool calls — extract final text and return
       const text = extractText(response.content);
       // Capture the full turn: everything added since history ended
-      const turnMessages = messages.slice(history.length);
+      const turnMessages = stripImagesFromTurn(messages.slice(history.length));
       turnMessages.push({ role: "assistant", content: text });
       appendToHistory(input.chatId, turnMessages);
       return text;
@@ -163,7 +186,7 @@ export async function runAgentLoop(
   // Don't store unfulfilled tool_use blocks from response — they'd lack matching tool_results.
   const fallbackText = extractText(response!.content);
   const cappingText = fallbackText || "I ran into too many steps trying to complete that. Could you try a simpler request?";
-  const turnMessages = messages.slice(history.length);
+  const turnMessages = stripImagesFromTurn(messages.slice(history.length));
   turnMessages.push({ role: "assistant", content: cappingText });
   appendToHistory(input.chatId, turnMessages);
   return cappingText;
@@ -176,6 +199,32 @@ function extractText(content: Anthropic.Messages.ContentBlock[]): string {
     .map((b) => b.text)
     .join("\n")
     .trim();
+}
+
+/**
+ * Strip image blocks from turn messages before storing in history/DB.
+ * Replaces multimodal user content with just the text portion to avoid
+ * bloating the database with base64 image data.
+ */
+function stripImagesFromTurn(
+  messages: Anthropic.Messages.MessageParam[],
+): Anthropic.Messages.MessageParam[] {
+  return messages.map((msg) => {
+    if (msg.role !== "user" || typeof msg.content === "string") return msg;
+
+    const blocks = msg.content as Anthropic.Messages.ContentBlockParam[];
+    // If content has image blocks, extract just the text
+    const hasImages = blocks.some((b) => b.type === "image");
+    if (!hasImages) return msg;
+
+    const textParts = blocks
+      .filter((b): b is Anthropic.Messages.TextBlockParam => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+
+    return { role: "user" as const, content: textParts || "[image]" };
+  });
 }
 
 /** Fire-and-forget typing indicator. */

@@ -7,7 +7,7 @@ import "./db/client.js";
 
 // Agent infrastructure
 import { mcpManager } from "./agent/mcp-manager.js";
-import { runAgentLoop } from "./agent/agent-loop.js";
+import { runAgentLoop, type ImageAttachment } from "./agent/agent-loop.js";
 import { getWorkspaceLink } from "./db/queries.js";
 
 // Custom tool registration
@@ -182,6 +182,161 @@ bot.on("message:text", async (ctx) => {
   } catch (error) {
     console.error("Agent loop error:", error);
     await ctx.reply("Something went wrong processing your message. Please try again.");
+  }
+});
+
+// --- Image message handling (vision) ---
+
+const TELEGRAM_FILE_URL = `https://api.telegram.org/file/bot${token}`;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB — matches Claude's image size limit
+
+/** Map Telegram MIME types to Claude-supported image media types. */
+function toImageMediaType(mime?: string): ImageAttachment["mediaType"] | null {
+  const map: Record<string, ImageAttachment["mediaType"]> = {
+    "image/jpeg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+  };
+  return (mime ? map[mime] : undefined) ?? null;
+}
+
+/** Download a Telegram file as a base64 string. */
+async function downloadTelegramFile(fileId: string): Promise<{ base64: string; mediaType: ImageAttachment["mediaType"] }> {
+  const file = await bot.api.getFile(fileId);
+  const url = `${TELEGRAM_FILE_URL}/${file.file_path}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to download file: ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  // Infer media type from file extension
+  const ext = file.file_path?.split(".").pop()?.toLowerCase();
+  const mediaType: ImageAttachment["mediaType"] =
+    ext === "png" ? "image/png"
+    : ext === "gif" ? "image/gif"
+    : ext === "webp" ? "image/webp"
+    : "image/jpeg";
+
+  return { base64: buffer.toString("base64"), mediaType };
+}
+
+/**
+ * Shared image message handler for both photos and documents.
+ * Uses custom group filtering that skips the MIN_MESSAGE_LENGTH check —
+ * for images, the image itself is the content regardless of caption length.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleImageMessage(
+  ctx: any,
+  fileId: string,
+  fileSize: number | undefined,
+  mediaType: ImageAttachment["mediaType"],
+): Promise<void> {
+  const chatId = ctx.chat.id;
+  const userId = ctx.from.id;
+  const caption = (ctx.message.caption as string) ?? "";
+  const messageThreadId = ctx.message.message_thread_id as number | undefined;
+  const replyMsg = ctx.message.reply_to_message as { text?: string; from?: { id: number; username?: string } } | undefined;
+
+  // Group filtering — skip MIN_MESSAGE_LENGTH check since the image is the content
+  if (ctx.chat.type !== "private") {
+    const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
+    const isReplyToBot = ctx.me?.id && replyMsg?.from?.id === ctx.me.id;
+
+    // Topic filtering
+    const configuredTopic = await getConfiguredTopicId(chatId);
+    if (configuredTopic && messageThreadId !== configuredTopic) {
+      if (!isMentioned && !isReplyToBot) return;
+    }
+
+    // Cooldown for non-targeted messages
+    if (!isMentioned && !isReplyToBot) {
+      const now = Date.now();
+      const lastCall = lastAgentCall.get(chatId);
+      if (lastCall && now - lastCall < GROUP_COOLDOWN_MS) return;
+    }
+
+    lastAgentCall.set(chatId, Date.now());
+  }
+
+  // File size guard — Claude supports images up to 5MB
+  if (fileSize && fileSize > MAX_IMAGE_SIZE) {
+    const replyOpts = messageThreadId ? { message_thread_id: messageThreadId } : {};
+    await ctx.reply("That image is too large for me to process (max 5MB). Try sending a compressed version.", replyOpts);
+    return;
+  }
+
+  const { base64, mediaType: inferredType } = await downloadTelegramFile(fileId);
+
+  const response = await runAgentLoop(ctx.api, {
+    text: caption || "What do you see in this image?",
+    chatId,
+    userId,
+    username: ctx.from.username,
+    isAdmin: isAdmin(userId),
+    messageThreadId,
+    replyToText: replyMsg?.text,
+    replyToUsername: replyMsg?.from?.username,
+    images: [{ base64, mediaType: mediaType ?? inferredType }],
+  });
+
+  if (response) {
+    const replyOpts = {
+      link_preview_options: { is_disabled: true } as const,
+      ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
+    };
+    try {
+      await ctx.reply(response, { parse_mode: "Markdown", ...replyOpts });
+    } catch (markdownError: unknown) {
+      const isParseError =
+        markdownError instanceof Error &&
+        markdownError.message.includes("can't parse entities");
+      if (isParseError) {
+        console.warn("Markdown parse failed, falling back to plain text");
+        await ctx.reply(response, replyOpts);
+      } else {
+        throw markdownError;
+      }
+    }
+  }
+}
+
+bot.on("message:photo", async (ctx) => {
+  if (!ctx.chat?.id || !ctx.from?.id) return;
+
+  const photos = ctx.message.photo;
+  const largest = photos[photos.length - 1];
+
+  try {
+    await handleImageMessage(
+      ctx as never,
+      largest.file_id,
+      largest.file_size,
+      "image/jpeg", // Telegram always compresses photos to JPEG
+    );
+  } catch (error) {
+    console.error("Photo processing error:", error);
+    await ctx.reply("Something went wrong processing your image. Please try again.");
+  }
+});
+
+bot.on("message:document", async (ctx) => {
+  const doc = ctx.message.document;
+  if (!ctx.chat?.id || !ctx.from?.id || !doc) return;
+
+  const mediaType = toImageMediaType(doc.mime_type);
+  if (!mediaType) return;
+
+  try {
+    await handleImageMessage(
+      ctx as never,
+      doc.file_id,
+      doc.file_size,
+      mediaType,
+    );
+  } catch (error) {
+    console.error("Document image processing error:", error);
+    await ctx.reply("Something went wrong processing your image. Please try again.");
   }
 });
 
