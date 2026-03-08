@@ -63,13 +63,8 @@ const lastAgentCall = new Map<number, number>();
 
 let botUsername: string | undefined;
 
-// Cache configured topic thread IDs per chat (avoids DB lookup on every message)
-interface TopicCacheEntry {
-  pmThreadId: number | null;
-  socialThreadId: number | null;
-  expiresAt: number;
-}
-const topicCache = new Map<number, TopicCacheEntry>();
+// Topic cache shared with tools so they can invalidate on config changes
+import { topicCache } from "./utils/topic-cache.js";
 const TOPIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /** Topic types for behavioral routing. */
