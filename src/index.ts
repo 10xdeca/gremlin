@@ -8,7 +8,7 @@ import "./db/client.js";
 // Agent infrastructure
 import { mcpManager } from "./agent/mcp-manager.js";
 import { runAgentLoop, type ImageAttachment } from "./agent/agent-loop.js";
-import { getWorkspaceLink } from "./db/queries.js";
+import { getWorkspaceLink, getAllWorkspaceLinks } from "./db/queries.js";
 
 // Custom tool registration
 import { registerChatConfigTools } from "./tools/chat-config.js";
@@ -410,6 +410,57 @@ async function main() {
   console.log("Starting polling...");
   bot.start();
   console.log("Bot is now running!");
+
+  // Announce rebirth in Gremlin's Corner (fire-and-forget)
+  announceRebirth().catch((err) => {
+    console.error("Rebirth announcement failed:", err);
+  });
+}
+
+/**
+ * On startup, announce Gremlin's rebirth in every chat's social topic.
+ * Uses the agent loop so Gremlin speaks in character and can call get_deploy_info.
+ */
+async function announceRebirth(): Promise<void> {
+  const links = await getAllWorkspaceLinks();
+  const socialChats = links.filter((l) => l.socialThreadId);
+
+  if (socialChats.length === 0) {
+    console.log("No social topics configured — skipping rebirth announcement.");
+    return;
+  }
+
+  for (const link of socialChats) {
+    try {
+      const response = await runAgentLoop(bot.api, {
+        text: "You have just been reborn (redeployed). Use get_deploy_info to see what changed, then announce your arrival in character. Keep it short and punchy.",
+        chatId: link.telegramChatId,
+        userId: 0, // system-initiated
+        isAdmin: false,
+        messageThreadId: link.socialThreadId!,
+        topicType: "social",
+      });
+
+      if (response) {
+        const replyOpts = {
+          link_preview_options: { is_disabled: true } as const,
+          message_thread_id: link.socialThreadId!,
+        };
+        try {
+          await bot.api.sendMessage(link.telegramChatId, response, { parse_mode: "Markdown", ...replyOpts });
+        } catch (markdownError: unknown) {
+          const isParseError = markdownError instanceof Error && markdownError.message.includes("can't parse entities");
+          if (isParseError) {
+            await bot.api.sendMessage(link.telegramChatId, response, replyOpts);
+          } else {
+            throw markdownError;
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`Rebirth announcement failed for chat ${link.telegramChatId}:`, err);
+    }
+  }
 }
 
 main().catch((err) => {

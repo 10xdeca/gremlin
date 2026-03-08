@@ -35,7 +35,15 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   );
 
   // Context
-  if (ctx.userId === 0) {
+  if (ctx.userId === 0 && ctx.topicType === "social") {
+    // System-initiated in social topic (rebirth announcement)
+    parts.push(`## System-Initiated — Rebirth Announcement`);
+    parts.push(`You have just been redeployed. Announce your arrival in character.`);
+    parts.push(`- Use \`get_deploy_info\` to find out what changed in this deployment.`);
+    parts.push(`- Be creative, punchy, and in-character. This is Gremlin's Corner — your space.`);
+    parts.push(`- Mention what changed (briefly) so the team knows what's new.`);
+    parts.push(`- Use Telegram Markdown formatting (bold with *text*, links with [text](url)).`);
+  } else if (ctx.userId === 0) {
     // System-initiated (scheduled reminders)
     parts.push(`## System-Initiated Reminder`);
     parts.push(`This is a scheduled reminder check — you are composing a message to post to the chat, not replying to a user.`);

@@ -93,20 +93,6 @@ jobs:
             'docker logs --tail 50 xdeca-pm-bot'
           exit 1
 
-      - name: Announce rebirth
-        if: success()
-        run: |
-          COMMITS=$(git log --oneline -5 --no-merges)
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="-1002401283379" \
-            -d message_thread_id="2012" \
-            -d text="🟢 *Gremlin has been reborn.* \`$(git rev-parse --short HEAD)\`
-
-          \`\`\`
-          ${COMMITS}
-          \`\`\`" \
-            -d parse_mode="Markdown"
-
       - name: Announce failed rebirth
         if: failure()
         run: |
