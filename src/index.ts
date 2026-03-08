@@ -64,17 +64,37 @@ const lastAgentCall = new Map<number, number>();
 let botUsername: string | undefined;
 
 // Cache configured topic thread IDs per chat (avoids DB lookup on every message)
-const topicCache = new Map<number, { threadId: number | null; expiresAt: number }>();
+interface TopicCacheEntry {
+  pmThreadId: number | null;
+  socialThreadId: number | null;
+  expiresAt: number;
+}
+const topicCache = new Map<number, TopicCacheEntry>();
 const TOPIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-async function getConfiguredTopicId(chatId: number): Promise<number | null> {
+/** Topic types for behavioral routing. */
+export type TopicType = "pm" | "social" | undefined;
+
+async function getTopicConfig(chatId: number): Promise<{ pmThreadId: number | null; socialThreadId: number | null }> {
   const cached = topicCache.get(chatId);
-  if (cached && Date.now() < cached.expiresAt) return cached.threadId;
+  if (cached && Date.now() < cached.expiresAt) return cached;
 
   const link = await getWorkspaceLink(chatId);
-  const threadId = link?.messageThreadId ?? null;
-  topicCache.set(chatId, { threadId, expiresAt: Date.now() + TOPIC_CACHE_TTL_MS });
-  return threadId;
+  const entry = {
+    pmThreadId: link?.messageThreadId ?? null,
+    socialThreadId: link?.socialThreadId ?? null,
+    expiresAt: Date.now() + TOPIC_CACHE_TTL_MS,
+  };
+  topicCache.set(chatId, entry);
+  return entry;
+}
+
+/** Determine which topic type a message is in. */
+function resolveTopicType(messageThreadId: number | undefined, pmThreadId: number | null, socialThreadId: number | null): TopicType {
+  if (!messageThreadId) return undefined;
+  if (pmThreadId && messageThreadId === pmThreadId) return "pm";
+  if (socialThreadId && messageThreadId === socialThreadId) return "social";
+  return undefined;
 }
 
 /**
@@ -128,12 +148,16 @@ bot.on("message:text", async (ctx) => {
     ctx.me?.id
   )) return;
 
-  // In groups with a configured topic:
-  // - In the configured topic (Project Management): process normally (all messages)
+  // In groups with configured topics:
+  // - In PM or Social topics: process normally (all messages subject to cooldown)
   // - In other topics: only process @mentions and replies to the bot
+  let topicType: TopicType;
   if (ctx.chat.type !== "private") {
-    const configuredTopic = await getConfiguredTopicId(chatId);
-    if (configuredTopic && ctx.message?.message_thread_id !== configuredTopic) {
+    const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
+    topicType = resolveTopicType(ctx.message?.message_thread_id, pmThreadId, socialThreadId);
+    const hasConfiguredTopics = pmThreadId || socialThreadId;
+    if (hasConfiguredTopics && !topicType) {
+      // Message is in an unrecognised topic — only respond to @mentions/replies
       const isMentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
       const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
       if (!isMentioned && !isReplyToBot) return;
@@ -153,6 +177,7 @@ bot.on("message:text", async (ctx) => {
       username: ctx.from?.username,
       isAdmin: isAdmin(userId),
       messageThreadId: ctx.message?.message_thread_id,
+      topicType,
       replyToText: ctx.message?.reply_to_message?.text,
       replyToUsername: ctx.message?.reply_to_message?.from?.username,
     });
@@ -239,13 +264,16 @@ async function handleImageMessage(
   const replyMsg = ctx.message.reply_to_message as { text?: string; from?: { id: number; username?: string } } | undefined;
 
   // Group filtering — skip MIN_MESSAGE_LENGTH check since the image is the content
+  let topicType: TopicType;
   if (ctx.chat.type !== "private") {
     const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
     const isReplyToBot = ctx.me?.id && replyMsg?.from?.id === ctx.me.id;
 
     // Topic filtering
-    const configuredTopic = await getConfiguredTopicId(chatId);
-    if (configuredTopic && messageThreadId !== configuredTopic) {
+    const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
+    topicType = resolveTopicType(messageThreadId, pmThreadId, socialThreadId);
+    const hasConfiguredTopics = pmThreadId || socialThreadId;
+    if (hasConfiguredTopics && !topicType) {
       if (!isMentioned && !isReplyToBot) return;
     }
 
@@ -275,6 +303,7 @@ async function handleImageMessage(
     username: ctx.from.username,
     isAdmin: isAdmin(userId),
     messageThreadId,
+    topicType,
     replyToText: replyMsg?.text,
     replyToUsername: replyMsg?.from?.username,
     images: [{ base64, mediaType: mediaType ?? inferredType }],

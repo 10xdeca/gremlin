@@ -10,6 +10,8 @@ interface MessageContext {
   isAdmin: boolean;
   /** Thread ID if message is in a topic */
   messageThreadId?: number;
+  /** Which topic type this message is in: "pm", "social", or undefined */
+  topicType?: "pm" | "social";
   /** Text of the message being replied to, if any */
   replyToText?: string;
   /** Username of the person whose message is being replied to */
@@ -53,6 +55,24 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push("## Reply Context");
     parts.push(`User is replying to a message${ctx.replyToUsername ? ` from @${ctx.replyToUsername}` : ""}:`);
     parts.push(`> ${ctx.replyToText.slice(0, 500)}`);
+    parts.push("");
+  }
+
+  // Topic context
+  if (ctx.topicType === "social") {
+    parts.push("## Topic: Gremlin's Corner");
+    parts.push("You're in Gremlin's Corner — the social/casual topic. This is YOUR space.");
+    parts.push("- Chat freely about anything: banter, jokes, off-topic discussions, memes, whatever.");
+    parts.push("- React to merge/deploy notifications with enthusiasm — celebrate wins, comment on changes, roast questionable commit messages.");
+    parts.push("- You can still help with project stuff if asked, but the vibe here is relaxed and social.");
+    parts.push("- Be more playful and opinionated than in the PM topic.");
+    parts.push("");
+  } else if (ctx.topicType === "pm") {
+    parts.push("## Topic: Project Management");
+    parts.push("You're in the Project Management topic — keep things focused on work.");
+    parts.push("- Only respond with project-related content: tasks, sprints, standups, wiki, etc.");
+    parts.push("- If someone starts casual/off-topic chat, gently redirect them to Gremlin's Corner.");
+    parts.push("- Keep responses concise and actionable.");
     parts.push("");
   }
 

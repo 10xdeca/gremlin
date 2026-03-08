@@ -4,6 +4,7 @@ import {
   createWorkspaceLink,
   deleteWorkspaceLink,
   updateWorkspaceLinkTopic,
+  updateWorkspaceLinkSocialTopic,
   getDefaultBoardConfig,
   upsertDefaultBoardConfig,
 } from "../db/queries.js";
@@ -32,6 +33,7 @@ export function registerChatConfigTools(): void {
               workspacePublicId: link.workspacePublicId,
               workspaceName: link.workspaceName,
               messageThreadId: link.messageThreadId,
+              socialThreadId: link.socialThreadId,
             }
           : null,
         defaultBoard: defaultBoard
@@ -110,6 +112,28 @@ export function registerChatConfigTools(): void {
       const threadId = args.message_thread_id as number | null;
       await updateWorkspaceLinkTopic(args.chat_id as number, threadId || null);
       return JSON.stringify({ success: true, message: threadId ? `Topic set to thread ${threadId}` : "Topic cleared" });
+    },
+  });
+
+  registerCustomTool({
+    name: "set_social_topic",
+    description:
+      "Set the Telegram topic (message thread) for Gremlin's Corner — the social/casual topic where the bot chats freely. Use 0 or null to clear.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chat_id: { type: "number", description: "Telegram chat ID" },
+        message_thread_id: {
+          type: ["number", "null"],
+          description: "Telegram message thread ID for the social topic, or null to clear",
+        },
+      },
+      required: ["chat_id"],
+    },
+    handler: async (args) => {
+      const threadId = args.message_thread_id as number | null;
+      await updateWorkspaceLinkSocialTopic(args.chat_id as number, threadId || null);
+      return JSON.stringify({ success: true, message: threadId ? `Social topic set to thread ${threadId}` : "Social topic cleared" });
     },
   });
 

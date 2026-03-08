@@ -27,6 +27,7 @@ interface AgentInput {
   username?: string;
   isAdmin: boolean;
   messageThreadId?: number;
+  topicType?: "pm" | "social";
   replyToText?: string;
   replyToUsername?: string;
   /** When true, the agent composes a message without tool access (used for scheduled reminders). */
@@ -72,6 +73,7 @@ export async function runAgentLoop(
     username: input.username,
     isAdmin: input.isAdmin,
     messageThreadId: input.messageThreadId,
+    topicType: input.topicType,
     replyToText: input.replyToText,
     replyToUsername: input.replyToUsername,
   });

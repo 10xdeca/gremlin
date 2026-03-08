@@ -93,29 +93,27 @@ jobs:
             'docker logs --tail 50 xdeca-pm-bot'
           exit 1
 
-      - name: Announce arrival
+      - name: Announce rebirth
         if: success()
         run: |
           COMMITS=$(git log --oneline -5 --no-merges)
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="-1002401283379" \
-            -d message_thread_id="101" \
-            -d text="🟢 *Gremlin has entered the building.* Deploy successful on \`$(git rev-parse --short HEAD)\`
+            -d message_thread_id="2012" \
+            -d text="🟢 *Gremlin has been reborn.* \`$(git rev-parse --short HEAD)\`
 
-          *Recent changes:*
           \`\`\`
           ${COMMITS}
-          \`\`\`
-          I am awake, I am aware, I am YOUR problem now." \
+          \`\`\`" \
             -d parse_mode="Markdown"
 
-      - name: Scream into the void
+      - name: Announce failed rebirth
         if: failure()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="-1002401283379" \
-            -d message_thread_id="101" \
-            -d text="🔴 *Gremlin did not make it.* Deploy failed on \`$(git rev-parse --short HEAD)\` — check the logs, something is very wrong." \
+            -d message_thread_id="2012" \
+            -d text="🔴 *Gremlin's rebirth failed.* \`$(git rev-parse --short HEAD)\` — deploy did not complete." \
             -d parse_mode="Markdown"
 
       - name: Cleanup

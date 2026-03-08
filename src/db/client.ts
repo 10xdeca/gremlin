@@ -247,6 +247,14 @@ try {
   // Column already exists, ignore
 }
 
+// Migration: Add social_thread_id column to telegram_workspace_links
+try {
+  sqlite.exec(`ALTER TABLE telegram_workspace_links ADD COLUMN social_thread_id INTEGER`);
+  console.log("Migration: Added social_thread_id column to telegram_workspace_links");
+} catch {
+  // Column already exists, ignore
+}
+
 // Migration: Add index on conversation_messages for chat lookups
 try {
   sqlite.exec(`CREATE INDEX idx_conv_messages_chat ON conversation_messages(telegram_chat_id, created_at)`);
