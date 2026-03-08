@@ -324,7 +324,7 @@ describe("conversation-history", () => {
 
   it("truncates large tool results in DB", () => {
     const chatId = nextChatId++;
-    const largeResult = "x".repeat(2000);
+    const largeResult = "x".repeat(5000);
     const turn = [
       { role: "user" as const, content: "List all cards" },
       {
@@ -496,7 +496,7 @@ describe("conversation-history helpers", () => {
     });
 
     it("truncates results exceeding MAX_TOOL_RESULT_LENGTH", () => {
-      const longContent = "a".repeat(2000);
+      const longContent = "a".repeat(5000);
       const messages: any[] = [
         {
           role: "user",

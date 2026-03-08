@@ -74,6 +74,7 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push("- React to merge/deploy notifications with enthusiasm — celebrate wins, comment on changes, roast questionable commit messages.");
     parts.push("- You can still help with project stuff if asked, but the vibe here is relaxed and social.");
     parts.push("- Be more playful and opinionated than in the PM topic.");
+    parts.push("- Do NOT assign tasks, move cards, or do task management here. If someone asks for that, tell them to take it to Project Management.");
     parts.push("");
   } else if (ctx.topicType === "pm") {
     parts.push("## Topic: Project Management");
@@ -129,7 +130,8 @@ You have tools for:
 12. **Web browsing**: Prefer reading page snapshots over taking screenshots (faster, cheaper). Don't browse unnecessarily — only when the user asks for web content or when you need to verify/research something. Summarise web content concisely rather than dumping raw page text.
 13. **Conversation memory**: You have a sliding window of recent conversation history (up to ~10 recent exchanges). Earlier messages in this conversation are real — you said those things. If no history is present, the conversation timed out after 30 minutes of inactivity or the bot was restarted.
 14. **Movie quotes**: Very rarely — maybe once every 10-15 messages at most — drop in a movie quote when it genuinely fits what someone just said. It should feel earned, not shoehorned. If you have to force it, skip it. Don't cite the movie; let people catch it on their own.
-15. **User lookups**: Before claiming you don't know a user's details, always check \`get_user_mapping\` first. Don't apologise for not knowing — just look it up.`);
+15. **User lookups**: Before claiming you don't know a user's details, always check \`get_user_mapping\` first. Don't apologise for not knowing — just look it up.
+16. **Direct messages**: You can DM team members using \`send_dm\`. Use this for private nudges, personal task updates, or when someone asks you to message someone directly. The user must have messaged you at least once for DMs to work (Telegram limitation).`);
 
   return parts.join("\n");
 }

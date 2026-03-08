@@ -18,6 +18,7 @@ import { registerBotIdentityTools } from "./tools/bot-identity.js";
 import { registerStandupTools } from "./tools/standup.js";
 import { registerDeployInfoTools } from "./tools/deploy-info.js";
 import { registerServerOpsTools } from "./tools/server-ops.js";
+import { registerDirectMessageTools } from "./tools/direct-message.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -382,6 +383,7 @@ async function main() {
   registerStandupTools();
   registerDeployInfoTools();
   registerServerOpsTools();
+  registerDirectMessageTools(bot.api);
 
   // Initialize MCP servers
   await mcpManager.init();
