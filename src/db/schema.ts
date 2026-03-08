@@ -7,6 +7,7 @@ export const telegramWorkspaceLinks = sqliteTable("telegram_workspace_links", {
   workspacePublicId: text("workspace_public_id").notNull(),
   workspaceName: text("workspace_name").notNull(),
   messageThreadId: integer("message_thread_id"),
+  socialThreadId: integer("social_thread_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
   createdByTelegramUserId: integer("created_by_telegram_user_id").notNull(),
 });

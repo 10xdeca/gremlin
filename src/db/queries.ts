@@ -29,6 +29,14 @@ export async function updateWorkspaceLinkTopic(telegramChatId: number, messageTh
     .run();
 }
 
+export async function updateWorkspaceLinkSocialTopic(telegramChatId: number, socialThreadId: number | null) {
+  return db
+    .update(schema.telegramWorkspaceLinks)
+    .set({ socialThreadId })
+    .where(eq(schema.telegramWorkspaceLinks.telegramChatId, telegramChatId))
+    .run();
+}
+
 export async function deleteWorkspaceLink(telegramChatId: number) {
   return db
     .delete(schema.telegramWorkspaceLinks)

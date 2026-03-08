@@ -4,9 +4,19 @@ import {
   createWorkspaceLink,
   deleteWorkspaceLink,
   updateWorkspaceLinkTopic,
+  updateWorkspaceLinkSocialTopic,
   getDefaultBoardConfig,
   upsertDefaultBoardConfig,
 } from "../db/queries.js";
+import { invalidateTopicCache } from "../utils/topic-cache.js";
+
+/** Parse admin user IDs from environment. */
+const ADMIN_USER_IDS: Set<number> = new Set(
+  (process.env.ADMIN_USER_IDS || "")
+    .split(",")
+    .map((id) => parseInt(id.trim(), 10))
+    .filter((id) => !isNaN(id))
+);
 
 /** Register chat configuration tools. */
 export function registerChatConfigTools(): void {
@@ -32,6 +42,7 @@ export function registerChatConfigTools(): void {
               workspacePublicId: link.workspacePublicId,
               workspaceName: link.workspaceName,
               messageThreadId: link.messageThreadId,
+              socialThreadId: link.socialThreadId,
             }
           : null,
         defaultBoard: defaultBoard
@@ -94,22 +105,56 @@ export function registerChatConfigTools(): void {
   registerCustomTool({
     name: "set_reminder_topic",
     description:
-      "Set the Telegram topic (message thread) where the bot should post reminders. Use 0 or null to clear.",
+      "Set the Telegram topic (message thread) where the bot should post reminders. Admin only. Use 0 or null to clear.",
     inputSchema: {
       type: "object",
       properties: {
         chat_id: { type: "number", description: "Telegram chat ID" },
+        user_id: { type: "number", description: "Telegram user ID of the requesting user" },
         message_thread_id: {
           type: ["number", "null"],
           description: "Telegram message thread ID, or null to clear",
         },
       },
-      required: ["chat_id"],
+      required: ["chat_id", "user_id"],
     },
     handler: async (args) => {
+      if (!ADMIN_USER_IDS.has(args.user_id as number)) {
+        return JSON.stringify({ error: "Only admins can change topic settings" });
+      }
+      const chatId = args.chat_id as number;
       const threadId = args.message_thread_id as number | null;
-      await updateWorkspaceLinkTopic(args.chat_id as number, threadId || null);
+      await updateWorkspaceLinkTopic(chatId, threadId || null);
+      invalidateTopicCache(chatId);
       return JSON.stringify({ success: true, message: threadId ? `Topic set to thread ${threadId}` : "Topic cleared" });
+    },
+  });
+
+  registerCustomTool({
+    name: "set_social_topic",
+    description:
+      "Set the Telegram topic (message thread) for Gremlin's Corner — the social/casual topic where the bot chats freely. Admin only. Use 0 or null to clear.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chat_id: { type: "number", description: "Telegram chat ID" },
+        user_id: { type: "number", description: "Telegram user ID of the requesting user" },
+        message_thread_id: {
+          type: ["number", "null"],
+          description: "Telegram message thread ID for the social topic, or null to clear",
+        },
+      },
+      required: ["chat_id", "user_id"],
+    },
+    handler: async (args) => {
+      if (!ADMIN_USER_IDS.has(args.user_id as number)) {
+        return JSON.stringify({ error: "Only admins can change topic settings" });
+      }
+      const chatId = args.chat_id as number;
+      const threadId = args.message_thread_id as number | null;
+      await updateWorkspaceLinkSocialTopic(chatId, threadId || null);
+      invalidateTopicCache(chatId);
+      return JSON.stringify({ success: true, message: threadId ? `Social topic set to thread ${threadId}` : "Social topic cleared" });
     },
   });
 
