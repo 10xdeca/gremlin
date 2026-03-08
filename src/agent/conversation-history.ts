@@ -11,7 +11,7 @@ const MAX_MESSAGES = 40;
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /** Maximum length for tool_result content blocks stored in DB. */
-const MAX_TOOL_RESULT_LENGTH = 1500;
+const MAX_TOOL_RESULT_LENGTH = 4000;
 
 /**
  * In-memory history tracks complete turns (each sub-array is one user→response cycle).
