@@ -66,12 +66,12 @@ describe("sprint utilities", () => {
   });
 
   describe("isMidSprintDay", () => {
-    it("returns true on day 7", () => {
-      expect(isMidSprintDay(new Date("2025-01-11T12:00:00Z"))).toBe(true);
+    it("returns true on day 8 (Sunday)", () => {
+      expect(isMidSprintDay(new Date("2025-01-12T12:00:00Z"))).toBe(true);
     });
 
     it("returns false on other days", () => {
-      expect(isMidSprintDay(new Date("2025-01-10T12:00:00Z"))).toBe(false);
+      expect(isMidSprintDay(new Date("2025-01-11T12:00:00Z"))).toBe(false);
     });
   });
 

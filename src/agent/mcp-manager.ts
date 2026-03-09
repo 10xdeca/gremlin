@@ -279,7 +279,7 @@ class McpManager {
       });
 
       const client = new Client({
-        name: `xdeca-pm-bot-${config.name}`,
+        name: `gremlin-${config.name}`,
         version: "1.0.0",
       });
 

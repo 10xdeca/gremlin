@@ -373,7 +373,7 @@ bot.catch((err) => {
 // --- Startup ---
 
 async function main() {
-  console.log("Starting xdeca-pm-bot (agent mode)...");
+  console.log("Starting Gremlin (agent mode)...");
 
   // Register custom tools
   registerChatConfigTools();
