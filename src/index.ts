@@ -26,6 +26,9 @@ import { startStandupChecker } from "./scheduler/standup-checker.js";
 import { startCalendarChecker } from "./scheduler/calendar-checker.js";
 import { startTokenHealthChecker } from "./scheduler/token-health.js";
 
+// Health check server
+import { startHealthServer, markBotReady, recordMessageProcessed } from "./health.js";
+
 // Admin check
 const ADMIN_USER_IDS: Set<number> = new Set(
   (process.env.ADMIN_USER_IDS || "")
@@ -179,6 +182,7 @@ bot.on("message:text", async (ctx) => {
     });
 
     if (response) {
+      recordMessageProcessed();
       const replyOpts = {
         link_preview_options: { is_disabled: true } as const,
         ...(ctx.message?.message_thread_id
@@ -408,9 +412,13 @@ async function main() {
   // Start the token health checker (proactive auth validation every 4h)
   startTokenHealthChecker();
 
+  // Start health check server
+  startHealthServer();
+
   // Start polling
   console.log("Starting polling...");
   bot.start();
+  markBotReady();
   console.log("Bot is now running!");
 
   // Announce rebirth in Gremlin's Corner (fire-and-forget)

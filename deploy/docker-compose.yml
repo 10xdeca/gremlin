@@ -19,6 +19,7 @@ services:
       - SPRINT_START_DATE=${SPRINT_START_DATE:-2025-01-05}
       - REMINDER_INTERVAL_HOURS=${REMINDER_INTERVAL_HOURS:-1}
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+      - DEPLOY_SHA=${DEPLOY_SHA:-dev}
     volumes:
       - gremlin_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
