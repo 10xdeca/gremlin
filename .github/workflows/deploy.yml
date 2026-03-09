@@ -45,6 +45,7 @@ jobs:
           SPRINT_START_DATE=${{ secrets.SPRINT_START_DATE }}
           REMINDER_INTERVAL_HOURS=${{ secrets.REMINDER_INTERVAL_HOURS }}
           ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
+          DEPLOY_SHA=${{ github.sha }}
           ENVEOF
 
       - name: Setup SSH
@@ -81,14 +82,15 @@ jobs:
 
       - name: Verify deployment
         run: |
-          for i in $(seq 1 6); do
-            STATUS=$(ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
-              'docker inspect --format="{{ .State.Status }}" gremlin')
-            echo "Attempt $i: container status=$STATUS"
-            [ "$STATUS" = "running" ] && exit 0
+          for i in $(seq 1 8); do
+            HEALTH=$(ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+              'curl -sf http://localhost:8080/health 2>/dev/null || echo "{\"status\":\"unreachable\"}"')
+            STATUS=$(echo "$HEALTH" | jq -r '.status // "unreachable"')
+            echo "Attempt $i: health=$STATUS"
+            [ "$STATUS" = "healthy" ] || [ "$STATUS" = "degraded" ] && exit 0
             sleep 5
           done
-          echo "::error::Container is not running after 30s! Dumping logs:"
+          echo "::error::Health check failed after 40s! Dumping logs:"
           ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
             'docker logs --tail 50 gremlin'
           exit 1

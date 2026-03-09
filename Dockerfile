@@ -39,5 +39,14 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/kan-bot.db
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Health check — verifies the app is actually working, not just running
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+EXPOSE 8080
+
 # Run the bot
 CMD ["node", "dist/index.js"]

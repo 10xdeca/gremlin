@@ -9,6 +9,9 @@ npm run dev          # Development with tsx watch
 npm run build        # TypeScript compile
 npm run start        # Run compiled JS
 npm run typecheck    # tsc --noEmit
+npm test             # Run tests (unit + integration + smoke)
+npm run test:watch   # Watch mode
+npm run test:coverage # With coverage report
 ```
 
 ## Architecture
@@ -66,6 +69,31 @@ This is the source code only. Deployment config is in `xdeca-infra/gremlin/`:
 - **Card move requires `index`**: The Kan API returns 500 if you PUT to `/cards/:id` with `listPublicId` but without `index`. Fixed in `mcp-servers/packages/kan/index.js` — `kan_update_card` now defaults `index` to `0` when `list_id` is provided without an explicit index. (PR #33)
 - Tool call logging was added at `src/agent/agent-loop.ts:98` to aid debugging MCP tool failures.
 
+## Testing
+
+Three layers of automated tests run in CI (typecheck → test → build):
+
+- **Unit tests** (`src/**/*.test.ts`) — Sprint utils, timezone, mentions, DB queries, conversation history
+- **Integration tests** (`src/agent/agent-loop.integration.test.ts`) — Full agent loop pipeline with mocked Claude API and MCP tools. Tests tool call routing, error handling, auth failures, max rounds, image handling.
+- **Smoke tests** (`src/smoke.test.ts`) — Verifies all modules import cleanly, DB schema applies, system prompt builds, custom tools register, and .env.example is up to date.
+
+## Health Check
+
+A lightweight HTTP health server runs on port 8080 (configurable via `HEALTH_PORT`):
+
+- `GET /health` — Returns component status (bot polling, MCP servers, auth). Returns 200 for healthy/degraded, 503 for unhealthy.
+- `GET /version` — Returns app version and deployed git SHA.
+
+The Dockerfile includes a `HEALTHCHECK` directive and the deploy workflow verifies the health endpoint post-deploy.
+
+## Versioning
+
+Uses [release-please](https://github.com/googleapis/release-please) for automated semantic versioning:
+
+- Conventional commits on `main` trigger release-please to create a release PR
+- Merging the release PR bumps `package.json` version, generates `CHANGELOG.md`, and creates a git tag `vX.Y.Z`
+- Workflow: `.github/workflows/release.yml`
+
 ## Environment Variables
 
 See `.env.example` for all required and optional variables. Key additions for the MCP-based architecture:
@@ -74,3 +102,5 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `OUTLINE_API_KEY` — Outline wiki API key
 - `OUTLINE_BASE_URL` — Outline API base URL
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
+- `HEALTH_PORT` — Health check server port (default: 8080)
+- `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)
