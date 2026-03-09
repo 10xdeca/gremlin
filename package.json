@@ -1,5 +1,5 @@
 {
-  "name": "xdeca-pm-bot",
+  "name": "gremlin",
   "version": "1.0.0",
   "description": "Telegram bot for Kan task management - chase people about overdue tasks",
   "type": "module",

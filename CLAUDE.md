@@ -1,4 +1,4 @@
-# xdeca-pm-bot
+# gremlin
 
 Telegram bot for Kan.bn task management — full LLM agent with MCP tools. TypeScript + Grammy + Claude Haiku + SQLite (Drizzle ORM).
 
@@ -43,13 +43,13 @@ Telegram Message → Grammy → Agent Loop (Claude Haiku + tools) → Response �
 
 ## Deployment
 
-This is the source code only. Deployment config is in `xdeca-infra/xdeca-pm-bot/`:
+This is the source code only. Deployment config is in `xdeca-infra/gremlin/`:
 
-- `docker-compose.yml` builds from this source (rsynced from `xdeca-pm-bot/` to `xdeca-pm-bot/src/` on server)
+- `docker-compose.yml` builds from this source (rsynced from `gremlin/` to `gremlin/src/` on server)
 - Secrets in `secrets.yaml` (SOPS-encrypted)
-- Deploy: `./scripts/deploy-to.sh 34.116.110.7 xdeca-pm-bot` from xdeca-infra repo
+- Deploy: `./scripts/deploy-to.sh 34.116.110.7 gremlin` from xdeca-infra repo
 - Server: GCP Compute Engine (e2-medium) at 34.116.110.7
-- Logs: `ssh ubuntu@34.116.110.7 'docker logs -f xdeca-pm-bot'`
+- Logs: `ssh ubuntu@34.116.110.7 'docker logs -f gremlin'`
 
 ## Key Patterns
 

@@ -1,4 +1,4 @@
-# xdeca-pm-bot
+# gremlin
 
 Telegram bot for [Kan.bn](https://tasks.xdeca.com) task management — full LLM agent with MCP tools. TypeScript + [grammY](https://grammy.dev) + Claude Haiku + SQLite (Drizzle ORM).
 
@@ -83,14 +83,14 @@ npm run test:coverage # Coverage report
 
 ## Deployment
 
-Source code only — deployment config lives in [xdeca-infra](https://github.com/10xdeca/xdeca-infra) under `xdeca-pm-bot/`.
+Source code only — deployment config lives in [xdeca-infra](https://github.com/10xdeca/xdeca-infra) under `gremlin/`.
 
 ```bash
 # From xdeca-infra repo:
-./scripts/deploy-to.sh 34.116.110.7 xdeca-pm-bot
+./scripts/deploy-to.sh 34.116.110.7 gremlin
 ```
 
-Secrets are managed via SOPS in `xdeca-infra/xdeca-pm-bot/secrets.yaml`.
+Secrets are managed via SOPS in `xdeca-infra/gremlin/secrets.yaml`.
 
 ## Project Structure
 

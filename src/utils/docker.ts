@@ -12,7 +12,7 @@
 import http from "http";
 
 const DOCKER_SOCKET = "/var/run/docker.sock";
-const CONTAINER_NAME = "xdeca-pm-bot";
+const CONTAINER_NAME = "gremlin";
 
 /** Make an HTTP request to the Docker Engine API over the Unix socket. */
 function dockerRequest(

@@ -59,7 +59,7 @@ jobs:
           rsync -avz \
             -e "ssh -i ~/.ssh/deploy_key" \
             deploy/docker-compose.yml .env \
-            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-pm-bot/
+            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/gremlin/
 
       - name: Deploy source
         run: |
@@ -72,25 +72,25 @@ jobs:
             --exclude .github \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ \
-            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-pm-bot/src/
+            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/gremlin/src/
 
       - name: Build and restart
         run: |
           ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
-            'cd ~/apps/xdeca-pm-bot && docker compose build --pull && docker compose up -d'
+            'cd ~/apps/gremlin && docker compose build --pull && docker compose up -d'
 
       - name: Verify deployment
         run: |
           for i in $(seq 1 6); do
             STATUS=$(ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
-              'docker inspect --format="{{ .State.Status }}" xdeca-pm-bot')
+              'docker inspect --format="{{ .State.Status }}" gremlin')
             echo "Attempt $i: container status=$STATUS"
             [ "$STATUS" = "running" ] && exit 0
             sleep 5
           done
           echo "::error::Container is not running after 30s! Dumping logs:"
           ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
-            'docker logs --tail 50 xdeca-pm-bot'
+            'docker logs --tail 50 gremlin'
           exit 1
 
       - name: Announce failed rebirth
