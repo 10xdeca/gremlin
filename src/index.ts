@@ -310,6 +310,7 @@ async function handleImageMessage(
   });
 
   if (response) {
+    recordMessageProcessed();
     const replyOpts = {
       link_preview_options: { is_disabled: true } as const,
       ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
