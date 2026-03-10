@@ -1,0 +1,57 @@
+# Changelog
+
+## 1.0.0 (2026-03-10)
+
+
+### Features
+
+* add [@mention](https://github.com/mention) task creation and interactive flow for passive detection ([#13](https://github.com/10xdeca/gremlin/issues/13)) ([65b084a](https://github.com/10xdeca/gremlin/commit/65b084ab75af84ccaede06125e4e5f8f7f1e00b5))
+* add A2A research agent integration ([#30](https://github.com/10xdeca/gremlin/issues/30)) ([b3e930e](https://github.com/10xdeca/gremlin/commit/b3e930eb2201a79c73ed42c7978a592ec945bb2f))
+* add async daily standups (Phase 1) ([#25](https://github.com/10xdeca/gremlin/issues/25)) ([dab8b40](https://github.com/10xdeca/gremlin/commit/dab8b40bea198d56b6ecfef4e9a547ee77661ff1))
+* add calendar event reminders via Radicale ([#29](https://github.com/10xdeca/gremlin/issues/29)) ([e4e9d87](https://github.com/10xdeca/gremlin/commit/e4e9d871c1501e0a241461b0513f70f35deb760e))
+* add card creation, [@mention](https://github.com/mention) assignment, and LLM task detection ([#12](https://github.com/10xdeca/gremlin/issues/12)) ([df66fe2](https://github.com/10xdeca/gremlin/commit/df66fe29f70951773c615ebe145af6e0d138f086))
+* add deploy diff tool so bot can report its own code changes ([#37](https://github.com/10xdeca/gremlin/issues/37)) ([edfa610](https://github.com/10xdeca/gremlin/commit/edfa61014408d8a570a5d82c2dc15ba2d205c0dc))
+* add Gremlin's Corner social topic with topic-aware behavior ([#51](https://github.com/10xdeca/gremlin/issues/51)) ([915adb1](https://github.com/10xdeca/gremlin/commit/915adb19e7da78dc92b52c518636f664f2440cc3))
+* add image vision capability ([#46](https://github.com/10xdeca/gremlin/issues/46)) ([f48d963](https://github.com/10xdeca/gremlin/commit/f48d9631198616b996eca0471e0255577e5d6960))
+* add Jake to survey + show completed respondents ([114add6](https://github.com/10xdeca/gremlin/commit/114add63eeb2378015919049312d408fa56f36fe))
+* add meta-sprint review survey web app ([#47](https://github.com/10xdeca/gremlin/issues/47)) ([0e61238](https://github.com/10xdeca/gremlin/commit/0e61238df66318fed47920f2b7e456d990490cca))
+* add movie quote personality to Gremlin's system prompt ([#48](https://github.com/10xdeca/gremlin/issues/48)) ([296e870](https://github.com/10xdeca/gremlin/commit/296e87004b2b66404c7ff233734ff2d0414c701f))
+* add naming ceremony for bot identity selection ([#11](https://github.com/10xdeca/gremlin/issues/11)) ([19b18dc](https://github.com/10xdeca/gremlin/commit/19b18dc620971dca3fee78df6201421e926bdce3))
+* add Playwright MCP server for web browsing ([#41](https://github.com/10xdeca/gremlin/issues/41)) ([3ac721a](https://github.com/10xdeca/gremlin/commit/3ac721a8ae90cc34bd770569a008f270f853f5ea))
+* add self-diagnostics and self-repair tools ([#39](https://github.com/10xdeca/gremlin/issues/39)) ([e0bf144](https://github.com/10xdeca/gremlin/commit/e0bf14484b9c7caa20a407f76b37be212661d58d))
+* add standup DM nudges for non-responders ([#27](https://github.com/10xdeca/gremlin/issues/27)) ([2a24f47](https://github.com/10xdeca/gremlin/commit/2a24f477c8708c7b6d78d31f79063a6b8d754db5))
+* add token auth error classification, admin alerts, and health checks ([#38](https://github.com/10xdeca/gremlin/issues/38)) ([5561d0e](https://github.com/10xdeca/gremlin/commit/5561d0e693d716cce2435dfe1c697c9e53333ca1))
+* add versioning, integration tests, smoke tests, and health check ([#58](https://github.com/10xdeca/gremlin/issues/58)) ([2810efa](https://github.com/10xdeca/gremlin/commit/2810efa8da24515ce71755790cf57ef0f27c4970))
+* improve memory, add DMs, confine tasks to PM topic ([#52](https://github.com/10xdeca/gremlin/issues/52)) ([6b8e0de](https://github.com/10xdeca/gremlin/commit/6b8e0de4c2c6b3ae135693af40da9b6c32596622))
+* integrate Radicale MCP server for CalDAV/CardDAV access ([c55ea12](https://github.com/10xdeca/gremlin/commit/c55ea12b4746220f99dc5c1f52cf852538efdf5a))
+* pass RADICALE_CALENDAR_OWNER to radicale MCP server ([e028fcc](https://github.com/10xdeca/gremlin/commit/e028fcce43eef6844740fb8f6274786d3f345999))
+* persist conversation history in SQLite + fix duplicate user mappings ([#42](https://github.com/10xdeca/gremlin/issues/42)) ([d92d5cf](https://github.com/10xdeca/gremlin/commit/d92d5cf994dca00f649692a06112ba7f2ce23358))
+* persist OAuth refresh token to SQLite ([#19](https://github.com/10xdeca/gremlin/issues/19)) ([57a890b](https://github.com/10xdeca/gremlin/commit/57a890b89ed107038580ce53ce5cd385d4a713ce))
+* prefill survey form for returning respondents ([3efef88](https://github.com/10xdeca/gremlin/commit/3efef8844d51dda570a4c51572f3c8884ea2c084))
+* preserve tool call context in conversation history ([#43](https://github.com/10xdeca/gremlin/issues/43)) ([fc71160](https://github.com/10xdeca/gremlin/commit/fc71160f1fac9ee93b0c084d3dc2eeb2b803c2f3))
+* require [@mention](https://github.com/mention) in non-primary topics ([#31](https://github.com/10xdeca/gremlin/issues/31)) ([b5e0eeb](https://github.com/10xdeca/gremlin/commit/b5e0eebd917176aaa1eee356ebdae236db5f493e))
+* rewrite bot as full LLM agent with MCP tools ([#18](https://github.com/10xdeca/gremlin/issues/18)) ([3563a85](https://github.com/10xdeca/gremlin/commit/3563a851fc169ac5f7d1fcdda57842ed8b38efa7))
+* route scheduler reminders through agent loop ([#44](https://github.com/10xdeca/gremlin/issues/44)) ([0ece8de](https://github.com/10xdeca/gremlin/commit/0ece8deb59ec837d4a55e627728c39b77424590a))
+* run calendar check on startup ([4a891ad](https://github.com/10xdeca/gremlin/commit/4a891ad4a9226240472e0c489c47d71e232993f7))
+* self-announce rebirth on startup via agent loop ([6659599](https://github.com/10xdeca/gremlin/commit/665959916463e7cfdec734521e2d70016701560c))
+* support reply-with-pointer for task creation from existing messages ([#17](https://github.com/10xdeca/gremlin/issues/17)) ([05d568c](https://github.com/10xdeca/gremlin/commit/05d568c32bd8d2deb6c6c9054789733840de5112))
+
+
+### Bug Fixes
+
+* add --no-sandbox flag for Playwright in Docker ([69f2a1b](https://github.com/10xdeca/gremlin/commit/69f2a1bc52753582344b741981d26121a0a87d65))
+* add tool call logging to agent loop ([adc7d1c](https://github.com/10xdeca/gremlin/commit/adc7d1c9c6b912d06c8b5166daedb89cf8927ae0))
+* add workflow_dispatch trigger to release workflow ([19ec510](https://github.com/10xdeca/gremlin/commit/19ec510761a9d24655a386391a6d22560304a4bb))
+* always check user mappings before claiming ignorance ([#50](https://github.com/10xdeca/gremlin/issues/50)) ([a354158](https://github.com/10xdeca/gremlin/commit/a354158a350476ece102b396cc9dae24026c2d55))
+* auto-remove workspace links for unreachable Telegram chats ([39c9d8a](https://github.com/10xdeca/gremlin/commit/39c9d8a838c5f046e369a008dfb296409e6e1080))
+* correct Claude Haiku model ID ([#10](https://github.com/10xdeca/gremlin/issues/10)) ([e15f696](https://github.com/10xdeca/gremlin/commit/e15f696f21e42543ed0b7959a36e682a83dfe8d0))
+* correct Sonnet 4.6 model ID (no date suffix) ([7eda1ee](https://github.com/10xdeca/gremlin/commit/7eda1eee45d9dfdf2c404e8d82d04a4163e790ec))
+* **deploy:** post arrival messages to Project Management topic ([#40](https://github.com/10xdeca/gremlin/issues/40)) ([70e19d8](https://github.com/10xdeca/gremlin/commit/70e19d8b78bd9edb27f5183fce1bc9203dbf28ff))
+* fall back to plain text when Telegram rejects Markdown ([#32](https://github.com/10xdeca/gremlin/issues/32)) ([34c3918](https://github.com/10xdeca/gremlin/commit/34c3918295c256728c942f11ce414103c70168a0))
+* fetch board data once per workspace check cycle to avoid 429s ([#9](https://github.com/10xdeca/gremlin/issues/9)) ([5502c8d](https://github.com/10xdeca/gremlin/commit/5502c8de7cfdc2ad5f2e5db928e955a5d6b40a54))
+* limit bot to configured topic in group chats ([#26](https://github.com/10xdeca/gremlin/issues/26)) ([ed2fce6](https://github.com/10xdeca/gremlin/commit/ed2fce643e69f26e6043ae20e063ac85277960bc))
+* revert to GITHUB_TOKEN now that org allows workflow writes ([da0212d](https://github.com/10xdeca/gremlin/commit/da0212d2ca2c2bc0596a6e5d5fbae1ca8e8a2968))
+* tell Gremlin it has conversation memory in system prompt ([#45](https://github.com/10xdeca/gremlin/issues/45)) ([7922524](https://github.com/10xdeca/gremlin/commit/792252424101b9bc18936229c0796a44ce191d7c))
+* tone down movie quote frequency per Gremlin's feedback ([#49](https://github.com/10xdeca/gremlin/issues/49)) ([9375664](https://github.com/10xdeca/gremlin/commit/9375664cae74c2b7c37a4e0cae2e12f1dc6729b2))
+* trigger CI on release-please branch pushes ([6ce3739](https://github.com/10xdeca/gremlin/commit/6ce3739b2098f0cad7836b85954541bc9c269c96))
+* use PAT for release-please (org blocks default GITHUB_TOKEN writes) ([77525fb](https://github.com/10xdeca/gremlin/commit/77525fbf14a95b55e880ca53e80792c40e6a9240))
