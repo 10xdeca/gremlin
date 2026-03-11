@@ -282,6 +282,22 @@ describe("smoke: system prompt builder", () => {
     expect(prompt).toContain("Sprint day:");
     expect(prompt).toContain("Your Capabilities");
   });
+
+  it("builds a system prompt with isPrivateChat without errors", async () => {
+    const { buildSystemPrompt } = await import("./agent/system-prompt.js");
+
+    const prompt = await buildSystemPrompt({
+      chatId: 67890,
+      userId: 67890,
+      username: "testuser",
+      isAdmin: false,
+      isPrivateChat: true,
+    });
+
+    expect(typeof prompt).toBe("string");
+    expect(prompt.length).toBeGreaterThan(100);
+    expect(prompt).toContain("Your Capabilities");
+  });
 });
 
 describe("smoke: custom tool registration", () => {

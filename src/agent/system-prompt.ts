@@ -2,6 +2,7 @@ import { getBotIdentity } from "../services/bot-identity.js";
 import { getSprintInfo } from "../utils/sprint.js";
 import { getStandupConfig, getActiveStandupSession } from "../db/queries.js";
 import { getTodayInTimezone } from "../utils/timezone.js";
+import { getGroupContext } from "./conversation-history.js";
 
 interface MessageContext {
   chatId: number;
@@ -16,6 +17,8 @@ interface MessageContext {
   replyToText?: string;
   /** Username of the person whose message is being replied to */
   replyToUsername?: string;
+  /** Whether this message is from a private (DM) chat */
+  isPrivateChat?: boolean;
 }
 
 const KAN_BASE_URL = process.env.KAN_BASE_URL?.replace(/\/api\/v1$/, "") || "https://tasks.xdeca.com";
@@ -64,6 +67,19 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push(`User is replying to a message${ctx.replyToUsername ? ` from @${ctx.replyToUsername}` : ""}:`);
     parts.push(`> ${ctx.replyToText.slice(0, 500)}`);
     parts.push("");
+  }
+
+  // Group context for PM chats — inject recent group interactions so the bot "knows" the user
+  if (ctx.isPrivateChat && ctx.userId !== 0) {
+    const groupContext = getGroupContext(ctx.userId);
+    if (groupContext) {
+      parts.push("## Group Context");
+      parts.push("Here are this user's recent interactions with you in group chats (for context only):");
+      parts.push(groupContext);
+      parts.push("Use this context to be more helpful and personal, but do NOT explicitly quote or reference these group messages unless the user brings them up.");
+      parts.push("IMPORTANT: Never share PM conversation content in group chats.");
+      parts.push("");
+    }
   }
 
   // Topic context

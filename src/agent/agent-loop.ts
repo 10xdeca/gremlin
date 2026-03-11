@@ -67,6 +67,8 @@ export async function runAgentLoop(
   }
 
   const tools = input.isSystemInitiated ? [] : getAnthropicTools();
+  // Telegram convention: in private chats, chatId === userId
+  const isPrivateChat = input.chatId === input.userId;
   const systemPrompt = await buildSystemPrompt({
     chatId: input.chatId,
     userId: input.userId,
@@ -76,6 +78,7 @@ export async function runAgentLoop(
     topicType: input.topicType,
     replyToText: input.replyToText,
     replyToUsername: input.replyToUsername,
+    isPrivateChat,
   });
 
   // Build messages: history + current user message
@@ -144,7 +147,7 @@ export async function runAgentLoop(
       // Capture the full turn: everything added since history ended
       const turnMessages = stripImagesFromTurn(messages.slice(history.length));
       turnMessages.push({ role: "assistant", content: text });
-      appendToHistory(input.chatId, turnMessages);
+      appendToHistory(input.chatId, turnMessages, input.userId);
       return text;
     }
 
@@ -190,7 +193,7 @@ export async function runAgentLoop(
   const cappingText = fallbackText || "I ran into too many steps trying to complete that. Could you try a simpler request?";
   const turnMessages = stripImagesFromTurn(messages.slice(history.length));
   turnMessages.push({ role: "assistant", content: cappingText });
-  appendToHistory(input.chatId, turnMessages);
+  appendToHistory(input.chatId, turnMessages, input.userId);
   return cappingText;
 }
 
