@@ -1,13 +1,13 @@
 # gremlin
 
-Telegram bot for [Kan.bn](https://tasks.xdeca.com) task management — full LLM agent with MCP tools. TypeScript + [grammY](https://grammy.dev) + Claude Haiku + SQLite (Drizzle ORM).
+Telegram bot for [Kan.bn](https://tasks.xdeca.com) task management — full LLM agent with MCP tools. TypeScript + [grammY](https://grammy.dev) + Claude Sonnet + SQLite (Drizzle ORM).
 
 ## How It Works
 
-Every user message flows through a Claude Haiku agent loop with access to Kan and Outline MCP tools. There are no hardcoded slash commands — the bot understands natural language and uses tools to fulfill requests.
+Every user message flows through a Claude Sonnet agent loop with access to Kan and Outline MCP tools. There are no hardcoded slash commands — the bot understands natural language and uses tools to fulfill requests.
 
 ```
-Telegram Message → grammY → Agent Loop (Claude Haiku + tools) → Response → Telegram
+Telegram Message → grammY → Agent Loop (Claude Sonnet + tools) → Response → Telegram
                                 ├── Kan MCP tools (task management)
                                 ├── Outline MCP tools (knowledge base)
                                 └── Custom tools (DB config, sprint info, user mappings)
@@ -98,7 +98,7 @@ Secrets are managed via SOPS in `xdeca-infra/gremlin/secrets.yaml`.
 src/
   index.ts                        # Entry point
   agent/
-    agent-loop.ts                 # Claude Haiku agent loop (all messages route here)
+    agent-loop.ts                 # Claude Sonnet agent loop (all messages route here)
     mcp-manager.ts                # MCP client (spawns kan-mcp and outline-mcp)
     tool-registry.ts              # Custom tool definitions
     system-prompt.ts              # Context-aware system prompt builder

@@ -1,6 +1,6 @@
 # gremlin
 
-Telegram bot for Kan.bn task management — full LLM agent with MCP tools. TypeScript + Grammy + Claude Haiku + SQLite (Drizzle ORM).
+Telegram bot for Kan.bn task management — full LLM agent with MCP tools. TypeScript + Grammy + Claude Sonnet + SQLite (Drizzle ORM).
 
 ## Build & Run
 
@@ -16,10 +16,10 @@ npm run test:coverage # With coverage report
 
 ## Architecture
 
-Every user message flows through a Claude Haiku agent loop with access to Kan and Outline MCP tools:
+Every user message flows through a Claude Sonnet agent loop with access to Kan and Outline MCP tools:
 
 ```
-Telegram Message → Grammy → Agent Loop (Claude Haiku + tools) → Response → Telegram
+Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response → Telegram
                                 ├── Kan MCP tools (task management)
                                 ├── Outline MCP tools (knowledge base)
                                 ├── Playwright MCP tools (web browsing, optional)
@@ -27,7 +27,7 @@ Telegram Message → Grammy → Agent Loop (Claude Haiku + tools) → Response �
 ```
 
 - **Grammy** for Telegram bot framework
-- **@anthropic-ai/sdk** for Claude Haiku agent loop (all interactions) and vagueness evaluation (scheduler)
+- **@anthropic-ai/sdk** for Claude Sonnet agent loop (all interactions) and vagueness evaluation (scheduler)
 - **@modelcontextprotocol/sdk** for MCP client (spawns kan-mcp, outline-mcp, and optionally playwright-mcp as subprocesses)
 - **better-sqlite3** + **Drizzle ORM** for local SQLite storage
 - **node-cron** for scheduled reminder checks (deterministic, no LLM)
