@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { eq, desc, and, ne, gt, sql } from "drizzle-orm";
+import { eq, desc, and, ne, gt } from "drizzle-orm";
 import { db, schema, sqlite } from "../db/client.js";
 
 /**
