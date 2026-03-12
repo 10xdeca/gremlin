@@ -106,6 +106,8 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `RADICALE_USERNAME` — Radicale username
 - `RADICALE_PASSWORD` — Radicale password (required to enable Radicale MCP server)
 - `RADICALE_CALENDAR_OWNER` — Optional: access another user's calendars
+- `GITHUB_TOKEN` — Fine-grained PAT with `contents:read` scope (required to enable code reading tools)
+- `GITHUB_REPO` — Default repo for code reading (default: `10xdeca/gremlin`)
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
 - `HEALTH_PORT` — Health check server port (default: 8080)
 - `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)
