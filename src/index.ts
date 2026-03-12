@@ -19,6 +19,7 @@ import { registerStandupTools } from "./tools/standup.js";
 import { registerDeployInfoTools } from "./tools/deploy-info.js";
 import { registerServerOpsTools } from "./tools/server-ops.js";
 import { registerDirectMessageTools } from "./tools/direct-message.js";
+import { registerGitHubRepoTools } from "./tools/github-repo.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -389,6 +390,7 @@ async function main() {
   registerDeployInfoTools();
   registerServerOpsTools();
   registerDirectMessageTools(bot.api);
+  registerGitHubRepoTools();
 
   // Initialize MCP servers
   await mcpManager.init();
