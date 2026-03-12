@@ -16,11 +16,13 @@ vi.mock("../db/client.js", async () => {
     CREATE TABLE conversation_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       telegram_chat_id INTEGER NOT NULL,
+      telegram_user_id INTEGER,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
     CREATE INDEX idx_conv_messages_chat ON conversation_messages(telegram_chat_id, created_at);
+    CREATE INDEX idx_conv_messages_user ON conversation_messages(telegram_user_id, created_at);
   `);
   const db = drizzle(sqlite, { schema });
 
@@ -29,7 +31,7 @@ vi.mock("../db/client.js", async () => {
 
 // These resolve to the mocked in-memory instances
 import { sqlite } from "../db/client.js";
-import { getHistory, appendToHistory, clearHistory, _testOnly } from "./conversation-history.js";
+import { getHistory, appendToHistory, clearHistory, getGroupContext, _testOnly } from "./conversation-history.js";
 
 // Use unique chat IDs per test to avoid in-memory cache interference
 let nextChatId = 1000;
@@ -450,6 +452,112 @@ describe("conversation-history", () => {
     expect(history).toHaveLength(2);
     expect(history[0]).toEqual({ role: "user", content: "What is 2+2?" });
     expect(history[1]).toEqual({ role: "assistant", content: "4" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group → PM context sharing tests
+// ---------------------------------------------------------------------------
+
+describe("getGroupContext", () => {
+  beforeEach(() => {
+    sqlite.exec("DELETE FROM conversation_messages");
+    sqlite.exec("DELETE FROM conversations");
+  });
+
+  it("returns null when user has no group messages", () => {
+    expect(getGroupContext(99999)).toBeNull();
+  });
+
+  it("returns formatted context for group messages", () => {
+    const userId = 5000;
+    const groupChatId = 6000; // different from userId = group chat
+
+    // Append a turn with userId in a group chat
+    appendToHistory(groupChatId, [
+      { role: "user", content: "What tasks do I have?" },
+      { role: "assistant", content: "You have 3 tasks assigned." },
+    ], userId);
+
+    const context = getGroupContext(userId);
+    expect(context).not.toBeNull();
+    expect(context).toContain("What tasks do I have?");
+    expect(context).toContain("You have 3 tasks assigned.");
+  });
+
+  it("excludes PM messages (chatId === userId)", () => {
+    const userId = 7000;
+
+    // PM message (chatId === userId)
+    appendToHistory(userId, [
+      { role: "user", content: "Private message" },
+      { role: "assistant", content: "Private reply" },
+    ], userId);
+
+    // Group message
+    appendToHistory(8000, [
+      { role: "user", content: "Group message" },
+      { role: "assistant", content: "Group reply" },
+    ], userId);
+
+    const context = getGroupContext(userId);
+    expect(context).not.toBeNull();
+    expect(context).toContain("Group message");
+    expect(context).not.toContain("Private message");
+  });
+
+  it("respects 24h window", () => {
+    const userId = 9000;
+    const groupChatId = 9001;
+    // Drizzle's { mode: "timestamp" } stores Date objects as epoch seconds
+    const twoDaysAgoEpoch = Math.floor((Date.now() - 48 * 60 * 60 * 1000) / 1000);
+    const nowEpoch = Math.floor(Date.now() / 1000);
+
+    // Insert old conversation row (last_activity is recent so TTL doesn't reject)
+    sqlite
+      .prepare("INSERT INTO conversations (telegram_chat_id, created_at, last_activity) VALUES (?, ?, ?)")
+      .run(groupChatId, twoDaysAgoEpoch, nowEpoch);
+
+    // Insert old message (beyond 24h window) — created_at as epoch seconds
+    sqlite
+      .prepare("INSERT INTO conversation_messages (telegram_chat_id, telegram_user_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(groupChatId, userId, "user", "Old group message", twoDaysAgoEpoch);
+
+    const context = getGroupContext(userId);
+    expect(context).toBeNull();
+  });
+
+  it("stores userId only on user-role string messages", () => {
+    const userId = 10000;
+    const chatId = 10001;
+
+    appendToHistory(chatId, [
+      { role: "user", content: "Create a task" },
+      {
+        role: "assistant",
+        content: [
+          { type: "tool_use" as const, id: "toolu_1", name: "kan_create_card", input: { title: "Test" } },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "tool_result" as const, tool_use_id: "toolu_1", content: '{"publicId":"abc"}' },
+        ],
+      },
+      { role: "assistant", content: "Created!" },
+    ], userId);
+
+    // Check DB: only the first user message should have telegram_user_id set
+    const rows = sqlite
+      .prepare("SELECT role, content, telegram_user_id FROM conversation_messages WHERE telegram_chat_id = ? ORDER BY id")
+      .all(chatId) as { role: string; content: string; telegram_user_id: number | null }[];
+
+    expect(rows).toHaveLength(4);
+    expect(rows[0].telegram_user_id).toBe(userId); // user string message
+    expect(rows[1].telegram_user_id).toBeNull();     // assistant tool_use
+    expect(rows[2].telegram_user_id).toBeNull();     // user tool_result (array, not string)
+    expect(rows[3].telegram_user_id).toBeNull();     // assistant text
   });
 });
 

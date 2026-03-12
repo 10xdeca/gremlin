@@ -143,6 +143,7 @@ export const conversations = sqliteTable("conversations", {
 export const conversationMessages = sqliteTable("conversation_messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   telegramChatId: integer("telegram_chat_id").notNull(),
+  telegramUserId: integer("telegram_user_id"),
   role: text("role").notNull(), // "user" | "assistant"
   content: text("content").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),

@@ -262,4 +262,19 @@ try {
   // Index already exists, ignore
 }
 
+// Migration: Add telegram_user_id column to conversation_messages for group→PM context
+try {
+  sqlite.exec(`ALTER TABLE conversation_messages ADD COLUMN telegram_user_id INTEGER`);
+  console.log("Migration: Added telegram_user_id column to conversation_messages");
+} catch {
+  // Column already exists, ignore
+}
+
+// Migration: Add index on conversation_messages for user-based lookups (group→PM context)
+try {
+  sqlite.exec(`CREATE INDEX idx_conv_messages_user ON conversation_messages(telegram_user_id, created_at)`);
+} catch {
+  // Index already exists, ignore
+}
+
 export { schema, sqlite };

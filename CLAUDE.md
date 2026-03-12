@@ -22,13 +22,14 @@ Every user message flows through a Claude Sonnet agent loop with access to Kan a
 Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response → Telegram
                                 ├── Kan MCP tools (task management)
                                 ├── Outline MCP tools (knowledge base)
+                                ├── Radicale MCP tools (calendar/contacts, optional)
                                 ├── Playwright MCP tools (web browsing, optional)
                                 └── Custom tools (DB config, sprint info, user mappings)
 ```
 
 - **Grammy** for Telegram bot framework
 - **@anthropic-ai/sdk** for Claude Sonnet agent loop (all interactions) and vagueness evaluation (scheduler)
-- **@modelcontextprotocol/sdk** for MCP client (spawns kan-mcp, outline-mcp, and optionally playwright-mcp as subprocesses)
+- **@modelcontextprotocol/sdk** for MCP client (spawns kan-mcp, outline-mcp, radicale-mcp, and optionally playwright-mcp as subprocesses)
 - **better-sqlite3** + **Drizzle ORM** for local SQLite storage
 - **node-cron** for scheduled reminder checks (deterministic, no LLM)
 - **Conversation history**: In-memory sliding window per chat (last 20 messages, 30min TTL)
@@ -42,7 +43,7 @@ Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response 
 - `src/services/` — Bot identity cache, vagueness evaluator
 - `src/db/` — Schema, queries, SQLite client
 - `src/utils/` — Sprint calculations, @mention parsing
-- `mcp-servers/` — Bundled MCP server source (kan/, outline/)
+- `mcp-servers/` — Bundled MCP server source (kan/, outline/, radicale/)
 
 ## Deployment
 
@@ -57,7 +58,7 @@ This is the source code only. Deployment config is in `xdeca-infra/gremlin/`:
 ## Key Patterns
 
 - ALL user messages (including /commands) route through the agent loop in `src/agent/agent-loop.ts`
-- The agent has access to ~40 MCP tools (Kan + Outline) plus custom tools for DB config
+- The agent has access to ~60 MCP tools (Kan + Outline + Radicale) plus custom tools for DB config
 - System prompt is context-aware: includes bot identity, workspace config, sprint status, team mappings, admin status
 - Scheduler uses MCP client directly (no LLM) for deterministic reminder checks
 - DB queries are async wrappers around synchronous Drizzle calls
@@ -101,6 +102,10 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `KAN_API_KEY` — Kan API key (replaces old `KAN_SERVICE_API_KEY`)
 - `OUTLINE_API_KEY` — Outline wiki API key
 - `OUTLINE_BASE_URL` — Outline API base URL
+- `RADICALE_URL` — CalDAV/CardDAV server URL
+- `RADICALE_USERNAME` — Radicale username
+- `RADICALE_PASSWORD` — Radicale password (required to enable Radicale MCP server)
+- `RADICALE_CALENDAR_OWNER` — Optional: access another user's calendars
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
 - `HEALTH_PORT` — Health check server port (default: 8080)
 - `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)

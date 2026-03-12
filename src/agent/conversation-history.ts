@@ -208,10 +208,13 @@ const trimStmt = sqlite.prepare(`
  * Write all messages from a turn to DB and trim excess.
  * Each message's content is serialized — string content stays as-is,
  * array content (tool blocks) is JSON-serialized.
+ *
+ * @param userId — Telegram user ID to tag on user-role messages with string content.
  */
 function writeToDb(
   chatId: number,
   turnMessages: Anthropic.Messages.MessageParam[],
+  userId?: number,
 ): void {
   try {
     const now = new Date();
@@ -233,8 +236,11 @@ function writeToDb(
     const toStore = truncateToolResults(turnMessages);
 
     // Insert all messages from the turn
+    // Tag user-role messages with string content (real user messages) with the userId.
+    // tool_result arrays (mid-turn continuations) are not tagged.
     const values = toStore.map((msg) => ({
       telegramChatId: chatId,
+      telegramUserId: userId && msg.role === "user" && typeof msg.content === "string" ? userId : null,
       role: msg.role,
       content: serializeContent(msg.content),
       createdAt: now,
@@ -279,10 +285,13 @@ export function getHistory(chatId: number): Anthropic.Messages.MessageParam[] {
  * Append a complete turn to conversation history.
  * A turn is the full message sequence for one user interaction:
  * [user, assistant/tool_use, user/tool_result, ..., assistant/text]
+ *
+ * @param userId — Telegram user ID, stored on user-role messages for group→PM context sharing.
  */
 export function appendToHistory(
   chatId: number,
   turnMessages: Anthropic.Messages.MessageParam[],
+  userId?: number,
 ): void {
   let entry = histories.get(chatId);
   if (!entry || Date.now() - entry.lastActivity > TTL_MS) {
@@ -302,7 +311,7 @@ export function appendToHistory(
   histories.set(chatId, entry);
 
   // Write-through to DB
-  writeToDb(chatId, turnMessages);
+  writeToDb(chatId, turnMessages, userId);
 }
 
 /** Clear history for a chat (both cache and DB). */
@@ -330,6 +339,77 @@ setInterval(() => {
     }
   }
 }, 10 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Group → PM context sharing
+// ---------------------------------------------------------------------------
+
+/** Maximum number of user messages to include in group context. */
+const GROUP_CONTEXT_LIMIT = 10;
+/** How far back to look for group messages (24 hours). */
+const GROUP_CONTEXT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Fetch recent group interactions for a user, formatted for injection into PM system prompt.
+ * Returns null if the user has no recent group messages.
+ *
+ * Only returns messages from group chats (telegram_chat_id != userId), ensuring
+ * PM content is never leaked into group context. Pairs each user message with the
+ * subsequent assistant reply from the same chat for readable context.
+ */
+/** Prepared statement: fetch recent group messages with their assistant replies in a single query. */
+const groupContextStmt = sqlite.prepare(`
+  SELECT
+    um.content AS user_content,
+    (
+      SELECT r.content FROM conversation_messages r
+      WHERE r.telegram_chat_id = um.telegram_chat_id
+        AND r.role = 'assistant'
+        AND r.id > um.id
+      ORDER BY r.id ASC
+      LIMIT 1
+    ) AS reply_content
+  FROM conversation_messages um
+  WHERE um.telegram_user_id = ?
+    AND um.telegram_chat_id != ?
+    AND um.role = 'user'
+    AND um.created_at > ?
+    AND um.content NOT LIKE '[%'
+  ORDER BY um.created_at DESC
+  LIMIT ?
+`);
+
+export function getGroupContext(userId: number): string | null {
+  try {
+    const cutoffEpoch = Math.floor((Date.now() - GROUP_CONTEXT_WINDOW_MS) / 1000);
+
+    const rows = groupContextStmt.all(
+      userId, userId, cutoffEpoch, GROUP_CONTEXT_LIMIT,
+    ) as { user_content: string; reply_content: string | null }[];
+
+    if (rows.length === 0) return null;
+
+    // Rows are newest-first from the query; reverse for chronological order
+    rows.reverse();
+
+    const pairs: string[] = [];
+    for (const row of rows) {
+      const userText = row.user_content.slice(0, 300);
+      if (row.reply_content && !row.reply_content.startsWith("[")) {
+        const replyText = row.reply_content.slice(0, 300);
+        pairs.push(`- You said: "${userText}"\n  Gremlin replied: "${replyText}"`);
+      } else {
+        pairs.push(`- You said: "${userText}"`);
+      }
+    }
+
+    if (pairs.length === 0) return null;
+    return pairs.join("\n");
+  } catch (err) {
+    console.error(`[conversation-history] Failed to get group context for user ${userId}:`, err);
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Test-only exports
