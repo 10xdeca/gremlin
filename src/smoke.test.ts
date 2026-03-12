@@ -146,6 +146,7 @@ vi.mock("./db/client.js", async () => {
     CREATE TABLE IF NOT EXISTS conversation_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       telegram_chat_id INTEGER NOT NULL,
+      telegram_user_id INTEGER,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
