@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { eq, desc, and, ne, gt } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db, schema, sqlite } from "../db/client.js";
 
 /**
@@ -357,57 +357,46 @@ const GROUP_CONTEXT_WINDOW_MS = 24 * 60 * 60 * 1000;
  * PM content is never leaked into group context. Pairs each user message with the
  * subsequent assistant reply from the same chat for readable context.
  */
+/** Prepared statement: fetch recent group messages with their assistant replies in a single query. */
+const groupContextStmt = sqlite.prepare(`
+  SELECT
+    um.content AS user_content,
+    (
+      SELECT r.content FROM conversation_messages r
+      WHERE r.telegram_chat_id = um.telegram_chat_id
+        AND r.role = 'assistant'
+        AND r.id > um.id
+      ORDER BY r.id ASC
+      LIMIT 1
+    ) AS reply_content
+  FROM conversation_messages um
+  WHERE um.telegram_user_id = ?
+    AND um.telegram_chat_id != ?
+    AND um.role = 'user'
+    AND um.created_at > ?
+    AND um.content NOT LIKE '[%'
+  ORDER BY um.created_at DESC
+  LIMIT ?
+`);
+
 export function getGroupContext(userId: number): string | null {
   try {
-    const cutoff = new Date(Date.now() - GROUP_CONTEXT_WINDOW_MS);
+    const cutoffEpoch = Math.floor((Date.now() - GROUP_CONTEXT_WINDOW_MS) / 1000);
 
-    // Fetch recent user messages from group chats (chat_id != user_id = not a PM)
-    const userMessages = db
-      .select({
-        id: schema.conversationMessages.id,
-        chatId: schema.conversationMessages.telegramChatId,
-        content: schema.conversationMessages.content,
-        createdAt: schema.conversationMessages.createdAt,
-      })
-      .from(schema.conversationMessages)
-      .where(
-        and(
-          eq(schema.conversationMessages.telegramUserId, userId),
-          ne(schema.conversationMessages.telegramChatId, userId),
-          eq(schema.conversationMessages.role, "user"),
-          gt(schema.conversationMessages.createdAt, cutoff),
-        ),
-      )
-      .orderBy(desc(schema.conversationMessages.createdAt))
-      .limit(GROUP_CONTEXT_LIMIT)
-      .all()
-      .reverse(); // chronological order
+    const rows = groupContextStmt.all(
+      userId, userId, cutoffEpoch, GROUP_CONTEXT_LIMIT,
+    ) as { user_content: string; reply_content: string | null }[];
 
-    if (userMessages.length === 0) return null;
+    if (rows.length === 0) return null;
 
-    // For each user message, grab the next assistant message with string content from the same chat
+    // Rows are newest-first from the query; reverse for chronological order
+    rows.reverse();
+
     const pairs: string[] = [];
-    for (const msg of userMessages) {
-      // Only include messages with plain text content (skip tool_result JSON)
-      if (msg.content.startsWith("[")) continue;
-
-      const reply = db
-        .select({ content: schema.conversationMessages.content })
-        .from(schema.conversationMessages)
-        .where(
-          and(
-            eq(schema.conversationMessages.telegramChatId, msg.chatId),
-            eq(schema.conversationMessages.role, "assistant"),
-            gt(schema.conversationMessages.id, msg.id),
-          ),
-        )
-        .orderBy(schema.conversationMessages.id)
-        .limit(1)
-        .get();
-
-      const userText = msg.content.slice(0, 300);
-      if (reply && !reply.content.startsWith("[")) {
-        const replyText = reply.content.slice(0, 300);
+    for (const row of rows) {
+      const userText = row.user_content.slice(0, 300);
+      if (row.reply_content && !row.reply_content.startsWith("[")) {
+        const replyText = row.reply_content.slice(0, 300);
         pairs.push(`- You said: "${userText}"\n  Gremlin replied: "${replyText}"`);
       } else {
         pairs.push(`- You said: "${userText}"`);
