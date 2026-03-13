@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/10xdeca/gremlin/compare/v1.0.0...v1.1.0) (2026-03-13)
+
+
+### Features
+
+* inject team roster into system prompt for instant user lookups ([#67](https://github.com/10xdeca/gremlin/issues/67)) ([a3db786](https://github.com/10xdeca/gremlin/commit/a3db786010120949ee4e3fe54fc9648e9d50f924))
+
+
+### Bug Fixes
+
+* update system prompt with correct GitHub tool names and remove ToolMaker ([#65](https://github.com/10xdeca/gremlin/issues/65)) ([8b8309f](https://github.com/10xdeca/gremlin/commit/8b8309f77bd901f6fd8ac407d76a548c15a42918))
+
 ## 1.0.0 (2026-03-13)
 
 
