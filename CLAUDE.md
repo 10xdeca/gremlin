@@ -38,7 +38,7 @@ Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response 
 ### Key Directories
 
 - `src/agent/` — Agent loop, MCP manager, tool registry, system prompt, conversation history
-- `src/tools/` — Custom tools (chat-config, user-mapping, sprint-info, bot-identity)
+- `src/tools/` — Custom tools (chat-config, user-mapping, sprint-info, bot-identity, github-repo, server-ops, deploy-info, direct-message, standup)
 - `src/scheduler/` — Cron-based reminder checks (uses MCP client directly, no LLM)
 - `src/services/` — Bot identity cache, vagueness evaluator
 - `src/db/` — Schema, queries, SQLite client
@@ -58,7 +58,7 @@ This is the source code only. Deployment config is in `xdeca-infra/gremlin/`:
 ## Key Patterns
 
 - ALL user messages (including /commands) route through the agent loop in `src/agent/agent-loop.ts`
-- The agent has access to ~60 MCP tools (Kan + Outline + Radicale) plus custom tools for DB config
+- The agent has access to ~88 MCP tools (Kan + Outline + Radicale + Playwright) plus custom tools for DB config, GitHub, and server ops
 - System prompt is context-aware: includes bot identity, workspace config, sprint status, team mappings, admin status
 - Scheduler uses MCP client directly (no LLM) for deterministic reminder checks
 - DB queries are async wrappers around synchronous Drizzle calls
@@ -106,8 +106,37 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `RADICALE_USERNAME` — Radicale username
 - `RADICALE_PASSWORD` — Radicale password (required to enable Radicale MCP server)
 - `RADICALE_CALENDAR_OWNER` — Optional: access another user's calendars
-- `GITHUB_TOKEN` — Fine-grained PAT with `contents:read` scope (required to enable code reading tools)
+- `GITHUB_TOKEN` — Fine-grained PAT with `contents:read`, `issues:write`, `pull_requests:write` scopes (enables code reading, issue creation, PR creation tools)
 - `GITHUB_REPO` — Default repo for code reading (default: `10xdeca/gremlin`)
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
 - `HEALTH_PORT` — Health check server port (default: 8080)
 - `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)
+
+## Future Directions
+
+Planned capabilities and enhancements:
+
+### GitHub Integration (expand existing tools)
+- **Issue creation** — `create_github_issue` tool so Gremlin can file bugs/tasks directly from Telegram conversations
+- **PR creation** — read code → create branch → open PR workflow, all via GitHub REST API (no git binary needed)
+- PAT already has `contents:write`, `issues:write`, `pull_requests:write` scopes
+
+### Web Search
+- Gremlin can browse specific URLs (Playwright) but can't search the web
+- Add a lightweight search tool wrapping Brave Search API or SearXNG
+- Would make Gremlin significantly more capable for research tasks
+
+### Long-term Memory
+- Currently context resets after 30min TTL
+- Add persistent memory (similar to Claude Code's memory system) for team preferences, recurring topics, project context
+- Could use Outline wiki as backing store (already has MCP tools for it)
+
+### Proactive Insights
+- Gremlin already has scheduler infrastructure (cron for reminders, standups, calendar checks)
+- Extend to proactively surface: undeployed merges, stale sprint cards, upcoming deadlines
+- Use existing MCP tools (Kan, GitHub, Radicale) to gather data, scheduler to trigger checks
+
+### Multi-repo Awareness
+- GitHub tools already support any repo in the org via `repo` parameter
+- Gremlin could cross-reference code across `gremlin`, `mcp-servers`, `kan`, `xdeca-infra`
+- Combined with web search, becomes a genuinely useful research assistant from Telegram
