@@ -211,6 +211,66 @@ bot.on("message:text", async (ctx) => {
   }
 });
 
+// --- New member onboarding via DM ---
+
+bot.on("message:new_chat_members", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const members = ctx.message.new_chat_members;
+
+  for (const member of members) {
+    // Skip bot self-joins
+    if (member.id === ctx.me.id) continue;
+
+    // Sanitize display name — first_name is user-controlled and could contain prompt injection attempts
+    const safeName = (member.username ? `@${member.username}` : member.first_name).slice(0, 64).replace(/[^\w@\s\-_.]/g, "")
+    const displayName = safeName || "new member";
+    console.log(`New member joined chat ${chatId}: ${displayName} (${member.id})`);
+
+    try {
+      // Run agent loop to generate a welcome/onboarding message
+      const response = await runAgentLoop(bot.api, {
+        text: `A new member just joined the group: ${displayName} (Telegram ID: ${member.id}). Welcome them warmly, introduce yourself, and start learning about them — timezone, role, interests, etc. Be conversational, not interrogative.`,
+        chatId: member.id,
+        userId: 0, // system-initiated
+        isAdmin: false,
+        isPrivateChat: true,
+      });
+
+      if (response) {
+        try {
+          // Try sending as a DM
+          await bot.api.sendMessage(member.id, response, {
+            parse_mode: "Markdown",
+            link_preview_options: { is_disabled: true },
+          });
+          console.log(`Onboarding DM sent to ${displayName}`);
+        } catch (dmError: unknown) {
+          // DM failed (likely 403 — user hasn't started the bot yet)
+          // Fall back to a group welcome in the social topic
+          console.warn(`DM to ${displayName} failed, falling back to group welcome:`, dmError);
+
+          const { socialThreadId } = await getTopicConfig(chatId);
+          const replyOpts = {
+            link_preview_options: { is_disabled: true } as const,
+            ...(socialThreadId ? { message_thread_id: socialThreadId } : {}),
+          };
+          const groupWelcome = `Welcome ${displayName}! 👋 Send me a DM to get started — I'd love to learn about you and get you set up.`;
+          try {
+            await bot.api.sendMessage(chatId, groupWelcome, { parse_mode: "Markdown", ...replyOpts });
+          } catch (markdownError: unknown) {
+            const isParseError = markdownError instanceof Error && markdownError.message.includes("can't parse entities");
+            if (isParseError) {
+              await bot.api.sendMessage(chatId, groupWelcome, replyOpts);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Onboarding error for ${displayName}:`, error);
+    }
+  }
+});
+
 // --- Image message handling (vision) ---
 
 const TELEGRAM_FILE_URL = `https://api.telegram.org/file/bot${token}`;

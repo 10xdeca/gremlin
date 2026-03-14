@@ -59,11 +59,21 @@ This is the source code only. Deployment config is in `xdeca-infra/gremlin/`:
 
 - ALL user messages (including /commands) route through the agent loop in `src/agent/agent-loop.ts`
 - The agent has access to ~88 MCP tools (Kan + Outline + Radicale + Playwright) plus custom tools for DB config, GitHub, and server ops
-- System prompt is context-aware: includes bot identity, workspace config, sprint status, team mappings, admin status
+- System prompt is context-aware: includes bot identity, workspace config, sprint status, team mappings, admin status, onboarding context (in DMs)
 - Scheduler uses MCP client directly (no LLM) for deterministic reminder checks
 - DB queries are async wrappers around synchronous Drizzle calls
 - Reminders use a `(card_public_id, telegram_chat_id, reminder_type)` UNIQUE constraint to prevent duplicates
 - Sprint planning window (days 1-2) gates certain reminder types
+
+## New Member Onboarding
+
+When a new user joins the Telegram group, Gremlin automatically:
+
+1. Runs an agent loop to generate a personalized welcome message
+2. Tries to DM the new member directly (requires the user to have started the bot first)
+3. Falls back to a group welcome in the social topic if DM fails (403)
+
+In private chats, the system prompt includes Radicale contact instructions — Gremlin naturally learns about people (timezone, role, interests) and creates contacts via `radicale_create_contact`. No onboarding state machine; conversation history handles multi-turn. Contacts are stored in Radicale (configured via `RADICALE_ADDRESS_BOOK_URL`), not SQLite.
 
 ## Known Kan API Quirks
 
@@ -106,6 +116,7 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `RADICALE_USERNAME` — Radicale username
 - `RADICALE_PASSWORD` — Radicale password (required to enable Radicale MCP server)
 - `RADICALE_CALENDAR_OWNER` — Optional: access another user's calendars
+- `RADICALE_ADDRESS_BOOK_URL` — Full URL to team contacts address book for onboarding (e.g. `https://dav.xdeca.com/pm-agent/team-contacts/`)
 - `GITHUB_TOKEN` — Fine-grained PAT with `contents:read`, `issues:write`, `pull_requests:write` scopes (enables code reading, issue creation, PR creation tools)
 - `GITHUB_REPO` — Default repo for code reading (default: `10xdeca/gremlin`)
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
