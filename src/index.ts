@@ -221,7 +221,9 @@ bot.on("message:new_chat_members", async (ctx) => {
     // Skip bot self-joins
     if (member.id === ctx.me.id) continue;
 
-    const displayName = member.username ? `@${member.username}` : member.first_name;
+    // Sanitize display name — first_name is user-controlled and could contain prompt injection attempts
+    const safeName = (member.username ? `@${member.username}` : member.first_name).slice(0, 64).replace(/[^\w@\s\-_.]/g, "")
+    const displayName = safeName || "new member";
     console.log(`New member joined chat ${chatId}: ${displayName} (${member.id})`);
 
     try {

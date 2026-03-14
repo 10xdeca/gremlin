@@ -28,6 +28,7 @@ const KAN_BASE_URL = process.env.KAN_BASE_URL?.replace(/\/api\/v1$/, "") || "htt
 export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   const identity = await getBotIdentity();
   const sprint = getSprintInfo();
+  const addressBookUrl = process.env.RADICALE_ADDRESS_BOOK_URL;
 
   const parts: string[] = [];
 
@@ -55,6 +56,9 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push(`- Start learning about them naturally: timezone, role, interests, birthday, preferred communication style.`);
     parts.push(`- Be conversational, not interrogative — this should feel like a friendly chat, not a form.`);
     parts.push(`- When you've gathered enough info, create a Radicale contact for them using \`radicale_create_contact\`.`);
+    if (addressBookUrl) {
+      parts.push(`- Address book for team contacts: ${addressBookUrl}`);
+    }
     parts.push(`- Use Telegram Markdown formatting.`);
   } else if (ctx.userId === 0) {
     // System-initiated (scheduled reminders)
@@ -92,9 +96,8 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     }
   }
 
-  // Team contacts context for private chats
-  const addressBookUrl = process.env.RADICALE_ADDRESS_BOOK_URL;
-  if (ctx.isPrivateChat && addressBookUrl) {
+  // Team contacts context for private chats (skip for system-initiated — already covered in onboarding block)
+  if (ctx.isPrivateChat && addressBookUrl && ctx.userId !== 0) {
     parts.push("## Team Contacts");
     parts.push(`Address book: ${addressBookUrl}`);
     parts.push("When chatting privately with someone who doesn't have a Radicale contact yet, naturally learn about them:");
