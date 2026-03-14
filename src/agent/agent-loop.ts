@@ -34,6 +34,8 @@ interface AgentInput {
   isSystemInitiated?: boolean;
   /** Optional images attached to the message (e.g. Telegram photos). */
   images?: ImageAttachment[];
+  /** Override private chat detection (needed for system-initiated DMs where chatId !== userId). */
+  isPrivateChat?: boolean;
 }
 
 /**
@@ -67,8 +69,9 @@ export async function runAgentLoop(
   }
 
   const tools = input.isSystemInitiated ? [] : getAnthropicTools();
-  // Telegram convention: in private chats, chatId === userId
-  const isPrivateChat = input.chatId === input.userId;
+  // Telegram convention: in private chats, chatId === userId.
+  // Allow explicit override for system-initiated DMs (userId=0).
+  const isPrivateChat = input.isPrivateChat ?? input.chatId === input.userId;
   const systemPrompt = await buildSystemPrompt({
     chatId: input.chatId,
     userId: input.userId,

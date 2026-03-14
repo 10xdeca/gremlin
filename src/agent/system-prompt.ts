@@ -47,6 +47,15 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     parts.push(`- Be creative, punchy, and in-character. This is Gremlin's Corner — your space.`);
     parts.push(`- Mention what changed (briefly) so the team knows what's new.`);
     parts.push(`- Use Telegram Markdown formatting (bold with *text*, links with [text](url)).`);
+  } else if (ctx.userId === 0 && ctx.isPrivateChat) {
+    // System-initiated DM — onboarding a new member
+    parts.push(`## System-Initiated — New Member Onboarding`);
+    parts.push(`A new team member just joined the group. You're DMing them privately to welcome and onboard them.`);
+    parts.push(`- Introduce yourself warmly — who you are, what you help with.`);
+    parts.push(`- Start learning about them naturally: timezone, role, interests, birthday, preferred communication style.`);
+    parts.push(`- Be conversational, not interrogative — this should feel like a friendly chat, not a form.`);
+    parts.push(`- When you've gathered enough info, create a Radicale contact for them using \`radicale_create_contact\`.`);
+    parts.push(`- Use Telegram Markdown formatting.`);
   } else if (ctx.userId === 0) {
     // System-initiated (scheduled reminders)
     parts.push(`## System-Initiated Reminder`);
@@ -81,6 +90,18 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
       parts.push("IMPORTANT: Never share PM conversation content in group chats.");
       parts.push("");
     }
+  }
+
+  // Team contacts context for private chats
+  const addressBookUrl = process.env.RADICALE_ADDRESS_BOOK_URL;
+  if (ctx.isPrivateChat && addressBookUrl) {
+    parts.push("## Team Contacts");
+    parts.push(`Address book: ${addressBookUrl}`);
+    parts.push("When chatting privately with someone who doesn't have a Radicale contact yet, naturally learn about them:");
+    parts.push("- Timezone, role, retro preference (async/in-person), communication style, interests, birthday");
+    parts.push("Use `radicale_create_contact` when you have enough info. Don't interrogate — be conversational and weave questions in naturally.");
+    parts.push("Check `radicale_list_contacts` first to avoid re-onboarding someone who already has a contact.");
+    parts.push("");
   }
 
   // Topic context
