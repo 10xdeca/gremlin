@@ -45,6 +45,8 @@ jobs:
           SPRINT_START_DATE=${{ secrets.SPRINT_START_DATE }}
           REMINDER_INTERVAL_HOURS=${{ secrets.REMINDER_INTERVAL_HOURS }}
           ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
+          PLAYWRIGHT_ENABLED=${{ secrets.PLAYWRIGHT_ENABLED }}
+          GITHUB_TOKEN=${{ secrets.GREMLIN_GITHUB_TOKEN }}
           DEPLOY_SHA=${{ github.sha }}
           ENVEOF
 
