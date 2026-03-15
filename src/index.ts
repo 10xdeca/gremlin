@@ -221,8 +221,9 @@ bot.on("message:new_chat_members", async (ctx) => {
     // Skip bot self-joins
     if (member.id === ctx.me.id) continue;
 
-    // Sanitize display name — first_name is user-controlled and could contain prompt injection attempts
-    const safeName = (member.username ? `@${member.username}` : member.first_name).slice(0, 64).replace(/[^\w@\s\-_.]/g, "")
+    // Sanitize display name — first_name is user-controlled and could contain prompt injection attempts.
+    // Blocklist approach: strip control chars and Markdown-special chars, but keep Unicode letters/emoji.
+    const safeName = (member.username ? `@${member.username}` : member.first_name).slice(0, 64).replace(/[\x00-\x1f*_`\[\]()~>#+\-=|{}!\\]/g, "")
     const displayName = safeName || "new member";
     console.log(`New member joined chat ${chatId}: ${displayName} (${member.id})`);
 
