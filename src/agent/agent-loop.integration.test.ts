@@ -74,7 +74,7 @@ function textResponse(text: string): Anthropic.Messages.Message {
     id: "msg_test",
     type: "message",
     role: "assistant",
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5-20251001",
     content: [{ type: "text", text }],
     stop_reason: "end_turn",
     stop_sequence: null,
@@ -92,7 +92,7 @@ function toolUseResponse(
     id: "msg_test",
     type: "message",
     role: "assistant",
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5-20251001",
     content: [
       {
         type: "tool_use",

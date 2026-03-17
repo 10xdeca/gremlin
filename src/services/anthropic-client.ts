@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getOAuthToken, saveOAuthToken } from "../db/queries.js";
 import { alertAdmins } from "./admin-alerts.js";
 
-const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
+const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"; // Claude Code CLI
 const REFRESH_BUFFER_MS = 60 * 60 * 1000; // Refresh 1 hour before expiry
 

@@ -9,7 +9,8 @@ import {
 } from "../services/anthropic-client.js";
 import { alertAdmins } from "../services/admin-alerts.js";
 
-const MODEL = "claude-sonnet-4-6";
+// TODO: Revert to claude-sonnet-4-6 when Anthropic fixes OAuth for Sonnet/Opus models
+const MODEL = "claude-haiku-4-5-20251001";
 const MAX_TOOL_ROUNDS = 10;
 const MAX_TOKENS = 2048;
 
