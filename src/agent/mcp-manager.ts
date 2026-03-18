@@ -63,6 +63,11 @@ class McpManager {
     return tools;
   }
 
+  /** Get tools for a specific MCP server by name. */
+  getToolsForServer(serverName: string): McpTool[] {
+    return this.servers.get(serverName)?.tools ?? [];
+  }
+
   /** Call a tool by name, routing to the correct MCP server. */
   async callTool(
     toolName: string,

@@ -164,6 +164,7 @@ vi.mock("./db/client.js", async () => {
 vi.mock("./agent/mcp-manager.js", () => ({
   mcpManager: {
     getAllTools: () => [],
+    getToolsForServer: () => [],
     callTool: async () => "mock result",
     init: async () => {},
     shutdown: async () => {},
@@ -241,6 +242,12 @@ describe("smoke: module imports", () => {
   it("imports utils/mentions without errors", async () => {
     const mentions = await import("./utils/mentions.js");
     expect(typeof mentions.extractMentions).toBe("function");
+  });
+
+  it("imports scanner/contact-scanner without errors", async () => {
+    const scanner = await import("./scanner/contact-scanner.js");
+    expect(typeof scanner.scanImageForContacts).toBe("function");
+    expect(typeof scanner.getActiveScanCount).toBe("function");
   });
 });
 

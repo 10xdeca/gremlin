@@ -38,6 +38,7 @@ Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response 
 ### Key Directories
 
 - `src/agent/` — Agent loop, MCP manager, tool registry, system prompt, conversation history
+- `src/scanner/` — Background contact scanner (passive image-to-contact pipeline)
 - `src/tools/` — Custom tools (chat-config, user-mapping, sprint-info, bot-identity, github-repo, server-ops, deploy-info, direct-message, standup)
 - `src/scheduler/` — Cron-based reminder checks (uses MCP client directly, no LLM)
 - `src/services/` — Bot identity cache, vagueness evaluator
@@ -74,6 +75,16 @@ When a new user joins the Telegram group, Gremlin automatically:
 3. Falls back to a group welcome in the social topic if DM fails (403)
 
 In private chats, the system prompt includes Radicale contact instructions — Gremlin naturally learns about people (timezone, role, interests) and creates contacts via `radicale_create_contact`. No onboarding state machine; conversation history handles multi-turn. Contacts are stored in Radicale (configured via `RADICALE_ADDRESS_BOOK_URL`), not SQLite.
+
+## Background Contact Scanner
+
+When `CONTACT_SCANNER_ENABLED=true`, Gremlin passively watches ALL images in ALL group topics and scans them for contact information (business cards, event badges, speaker slides, etc.). This runs as fire-and-forget middleware before the normal image handlers.
+
+**Two-step pipeline:**
+1. **Classification** (Haiku, no tools, ~512 tokens) — "Does this image contain contact info?" Most images stop here.
+2. **Confirmation** — Posts a message listing the detected contacts and asks the user to confirm. The user replies "yes" and the normal agent loop (which has Radicale tools) handles the actual creation. No contacts are created without human confirmation.
+
+**Concurrency:** Max 2 simultaneous scans. Excess are dropped (logged). DMs are skipped (private chats already have natural contact creation via onboarding).
 
 ## Known Kan API Quirks
 
@@ -120,6 +131,7 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `GITHUB_TOKEN` — Fine-grained PAT with `contents:read`, `issues:write`, `pull_requests:write` scopes (enables code reading, issue creation, PR creation tools)
 - `GITHUB_REPO` — Default repo for code reading (default: `10xdeca/gremlin`)
 - `PLAYWRIGHT_ENABLED` — Set to `"true"` to enable web browsing tools (Playwright MCP server)
+- `CONTACT_SCANNER_ENABLED` — Set to `"true"` to enable background image-to-contact scanning in group topics
 - `HEALTH_PORT` — Health check server port (default: 8080)
 - `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)
 
