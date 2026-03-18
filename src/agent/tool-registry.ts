@@ -59,7 +59,7 @@ export async function executeTool(
 }
 
 /** Convert an MCP tool schema to Anthropic tool format. */
-function mcpToolToAnthropic(tool: McpTool): Anthropic.Messages.Tool {
+export function mcpToolToAnthropic(tool: McpTool): Anthropic.Messages.Tool {
   return {
     name: tool.name,
     description: tool.description,

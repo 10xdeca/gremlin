@@ -30,6 +30,9 @@ import { startTokenHealthChecker } from "./scheduler/token-health.js";
 // Health check server
 import { startHealthServer, markBotReady, recordMessageProcessed } from "./health.js";
 
+// Contact scanner
+import { scanImageForContacts, type ScanContext } from "./scanner/contact-scanner.js";
+
 // Admin check
 const ADMIN_USER_IDS: Set<number> = new Set(
   (process.env.ADMIN_USER_IDS || "")
@@ -170,6 +173,30 @@ bot.on("message:text", async (ctx) => {
   }
 
   try {
+    // If replying to a message with a photo/image document, download and attach it
+    // so Claude can see the image (e.g. "scan this", "what does this show?")
+    let replyImages: ImageAttachment[] | undefined;
+    const replyMsg = ctx.message?.reply_to_message;
+    if (replyMsg) {
+      try {
+        if (replyMsg.photo?.length) {
+          const largest = replyMsg.photo[replyMsg.photo.length - 1];
+          if (!largest.file_size || largest.file_size <= MAX_IMAGE_SIZE) {
+            const { base64, mediaType } = await downloadTelegramFile(largest.file_id);
+            replyImages = [{ base64, mediaType }];
+          }
+        } else if (replyMsg.document) {
+          const docType = toImageMediaType(replyMsg.document.mime_type);
+          if (docType && (!replyMsg.document.file_size || replyMsg.document.file_size <= MAX_IMAGE_SIZE)) {
+            const { base64, mediaType } = await downloadTelegramFile(replyMsg.document.file_id);
+            replyImages = [{ base64, mediaType }];
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to download replied-to image:", err);
+      }
+    }
+
     const response = await runAgentLoop(ctx.api, {
       text,
       chatId,
@@ -178,8 +205,9 @@ bot.on("message:text", async (ctx) => {
       isAdmin: isAdmin(userId),
       messageThreadId: ctx.message?.message_thread_id,
       topicType,
-      replyToText: ctx.message?.reply_to_message?.text,
+      replyToText: ctx.message?.reply_to_message?.text ?? ctx.message?.reply_to_message?.caption,
       replyToUsername: ctx.message?.reply_to_message?.from?.username,
+      images: replyImages,
     });
 
     if (response) {
@@ -391,6 +419,77 @@ async function handleImageMessage(
       }
     }
   }
+}
+
+// --- Background contact scanner middleware ---
+// Fires before normal photo/document handlers. Downloads the image and scans
+// for contact information in the background (fire-and-forget), then calls next()
+// so normal handlers run unaffected.
+
+if (process.env.CONTACT_SCANNER_ENABLED === "true") {
+  bot.on(["message:photo", "message:document"], async (ctx, next) => {
+    // Skip DMs — private chats already have natural contact creation via onboarding
+    if (ctx.chat.type === "private") return next();
+
+    try {
+      let fileId: string | undefined;
+      let fileSize: number | undefined;
+      let mediaType: ImageAttachment["mediaType"] | null = null;
+
+      if (ctx.message.photo) {
+        const photos = ctx.message.photo;
+        const largest = photos[photos.length - 1];
+        fileId = largest.file_id;
+        fileSize = largest.file_size;
+        mediaType = "image/jpeg";
+      } else if (ctx.message.document) {
+        const doc = ctx.message.document;
+        mediaType = toImageMediaType(doc.mime_type);
+        if (mediaType) {
+          fileId = doc.file_id;
+          fileSize = doc.file_size;
+        }
+      }
+
+      if (fileId && mediaType && (!fileSize || fileSize <= MAX_IMAGE_SIZE)) {
+        const scanCtx: ScanContext = {
+          chatId: ctx.chat.id,
+          messageThreadId: ctx.message.message_thread_id,
+        };
+
+        // Confirmation callback — sends the confirmation message to the same thread
+        const sendConfirmation = async (sCtx: ScanContext, message: string) => {
+          const opts = {
+            link_preview_options: { is_disabled: true } as const,
+            ...(sCtx.messageThreadId ? { message_thread_id: sCtx.messageThreadId } : {}),
+          };
+          try {
+            await bot.api.sendMessage(sCtx.chatId, message, { parse_mode: "Markdown", ...opts });
+          } catch (markdownError: unknown) {
+            const isParseError = markdownError instanceof Error && markdownError.message.includes("can't parse entities");
+            if (isParseError) {
+              await bot.api.sendMessage(sCtx.chatId, message, opts);
+            } else {
+              throw markdownError;
+            }
+          }
+        };
+
+        // Fire-and-forget — download and scan in background
+        downloadTelegramFile(fileId)
+          .then(({ base64, mediaType: inferredType }) =>
+            scanImageForContacts(base64, mediaType ?? inferredType, scanCtx, sendConfirmation),
+          )
+          .catch((err) => {
+            console.error("Contact scanner: download/scan failed:", err);
+          });
+      }
+    } catch (err) {
+      console.error("Contact scanner middleware error:", err);
+    }
+
+    return next();
+  });
 }
 
 bot.on("message:photo", async (ctx) => {
