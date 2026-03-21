@@ -1,14 +1,12 @@
 import "dotenv/config";
 import https from "https";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { Bot } from "grammy";
+import { Bot, webhookCallback } from "grammy";
 
-// Log unhandled rejections before crashing. Don't suppress them —
-// grammY's polling loop needs to crash the process so Docker restarts it.
-// Suppressing 409s silently kills the polling loop while leaving the
-// process alive (bot looks healthy but can't receive messages).
+// Log unhandled rejections before crashing so we get diagnostics in logs.
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection (will crash):", err);
 });
@@ -39,7 +37,7 @@ import { startCalendarChecker } from "./scheduler/calendar-checker.js";
 import { startTokenHealthChecker } from "./scheduler/token-health.js";
 
 // Health check server
-import { startHealthServer, markBotReady, recordMessageProcessed } from "./health.js";
+import { startHealthServer, setWebhookHandler, markBotReady, recordMessageProcessed } from "./health.js";
 
 // Contact scanner
 import { scanImageForContacts, type ScanContext } from "./scanner/contact-scanner.js";
@@ -593,49 +591,53 @@ async function main() {
   // Start the token health checker (proactive auth validation every 4h)
   startTokenHealthChecker();
 
-  // Start health check server
+  // Start health check server (also serves webhook endpoint when configured)
   startHealthServer();
 
-  // Clear any lingering webhook/polling session, then retry getUpdates
-  // until Telegram releases the old connection. This avoids the 409
-  // "terminated by other getUpdates request" crash on deploy.
-  console.log("Clearing previous polling session...");
-  await bot.api.deleteWebhook({ drop_pending_updates: true });
+  const webhookUrl = process.env.WEBHOOK_URL;
 
-  const MAX_POLL_RETRIES = 6;
-  const POLL_RETRY_DELAY_MS = 10000; // 10 seconds between retries
-  for (let attempt = 1; attempt <= MAX_POLL_RETRIES; attempt++) {
+  let useWebhook = false;
+
+  if (webhookUrl) {
+    // --- Attempt webhook mode ---
+    const webhookSecret = process.env.WEBHOOK_SECRET || crypto.randomBytes(32).toString("hex");
+
+    const handler = webhookCallback(bot, "http", { secretToken: webhookSecret });
+    setWebhookHandler(handler);
+
     try {
-      console.log(`Polling probe attempt ${attempt}/${MAX_POLL_RETRIES}...`);
-      // Short timeout getUpdates to test if the connection is free
-      await bot.api.getUpdates({ offset: -1, limit: 1, timeout: 1 });
-      console.log("Polling probe succeeded — connection is clear.");
-      break;
+      console.log(`Setting webhook to ${webhookUrl}/webhook ...`);
+      await bot.api.setWebhook(`${webhookUrl}/webhook`, {
+        secret_token: webhookSecret,
+        drop_pending_updates: true,
+      });
+      console.log("Webhook set successfully.");
+      markBotReady();
+      console.log("Bot is now running in webhook mode!");
+      useWebhook = true;
     } catch (err) {
-      const msg = String(err);
-      if (msg.includes("409") && attempt < MAX_POLL_RETRIES) {
-        console.warn(`409 conflict on attempt ${attempt} — waiting ${POLL_RETRY_DELAY_MS / 1000}s...`);
-        await new Promise((resolve) => setTimeout(resolve, POLL_RETRY_DELAY_MS));
-      } else {
-        throw err; // Non-409 error or out of retries — crash and let Docker restart
-      }
+      console.warn("Webhook setup failed, falling back to polling:", (err as Error).message);
+      setWebhookHandler(null); // Clear the handler
     }
   }
 
-  // Catch middleware errors (message handler errors, not polling errors)
-  bot.catch((err) => {
-    console.error("Bot middleware error:", err);
-  });
+  if (!useWebhook) {
+    // --- Polling mode (fallback) ---
+    if (!webhookUrl) console.log("No WEBHOOK_URL set — using polling mode.");
 
-  // Start polling — connection should be clear now
-  console.log("Starting polling...");
-  bot.start({
-    drop_pending_updates: true,
-    onStart: () => {
-      markBotReady();
-      console.log("Bot is now running!");
-    },
-  });
+
+    // Clear any existing webhook before starting polling
+    await bot.api.deleteWebhook({ drop_pending_updates: true });
+
+    console.log("Starting polling...");
+    bot.start({
+      drop_pending_updates: true,
+      onStart: () => {
+        markBotReady();
+        console.log("Bot is now running in polling mode!");
+      },
+    });
+  }
 
   // Announce rebirth in Gremlin's Corner (fire-and-forget)
   announceRebirth().catch((err) => {

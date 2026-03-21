@@ -23,18 +23,29 @@ function loadVersion(): string {
 
 const version = loadVersion();
 
-/** Tracks whether the Telegram bot polling is active. */
-let botPollingActive = false;
+/** Tracks whether the Telegram bot is active (polling or webhook). */
+let botActive = false;
 let lastMessageAt = 0;
 
-/** Called from index.ts once the bot starts polling. */
+/** Called from index.ts once the bot starts receiving updates. */
 export function markBotReady(): void {
-  botPollingActive = true;
+  botActive = true;
 }
 
 /** Called from index.ts on each successfully processed message. */
 export function recordMessageProcessed(): void {
   lastMessageAt = Date.now();
+}
+
+/**
+ * Optional webhook request handler. When set, POST requests to /webhook
+ * are forwarded to this handler (grammY's webhookCallback).
+ */
+let webhookHandler: ((req: http.IncomingMessage, res: http.ServerResponse) => void) | null = null;
+
+/** Register (or clear) a webhook handler to be served on /webhook. */
+export function setWebhookHandler(handler: ((req: http.IncomingMessage, res: http.ServerResponse) => void) | null): void {
+  webhookHandler = handler;
 }
 
 /** Build the health check response. */
@@ -44,9 +55,10 @@ async function getHealthStatus(): Promise<{
 }> {
   const components: Record<string, unknown> = {};
 
-  // Bot polling
+  // Bot status
   components.bot = {
-    status: botPollingActive ? "up" : "down",
+    status: botActive ? "up" : "down",
+    mode: webhookHandler ? "webhook" : "polling",
     lastMessageAt: lastMessageAt || null,
   };
 
@@ -68,7 +80,7 @@ async function getHealthStatus(): Promise<{
 
   // Overall status
   let status: "healthy" | "degraded" | "unhealthy" = "healthy";
-  if (!botPollingActive) {
+  if (!botActive) {
     status = "unhealthy";
   } else if (!allHealthy || tokenHealth.status !== "healthy") {
     status = "degraded";
@@ -77,7 +89,7 @@ async function getHealthStatus(): Promise<{
   return { status, components };
 }
 
-/** Start the health check HTTP server. */
+/** Start the health check HTTP server. Also serves the webhook endpoint when configured. */
 export function startHealthServer(): void {
   const server = http.createServer(async (req, res) => {
     if (req.url === "/health") {
@@ -97,6 +109,12 @@ export function startHealthServer(): void {
       const sha = process.env.DEPLOY_SHA || "dev";
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ version, sha }));
+      return;
+    }
+
+    // Webhook endpoint — delegates to grammY's webhookCallback
+    if (req.url === "/webhook" && req.method === "POST" && webhookHandler) {
+      webhookHandler(req, res);
       return;
     }
 
