@@ -588,12 +588,25 @@ async function main() {
   // Start health check server
   startHealthServer();
 
-  // Start polling — drop any updates queued while the bot was offline
-  // to avoid a burst of responses to stale messages.
-  console.log("Starting polling (dropping pending updates)...");
-  bot.start({ drop_pending_updates: true });
-  markBotReady();
-  console.log("Bot is now running!");
+  // Delete any lingering webhook and force-close previous polling sessions.
+  // Telegram's getUpdates returns 409 if another session is active — this
+  // call with drop_pending_updates clears both the webhook and the update queue,
+  // giving the new polling session a clean slate.
+  console.log("Clearing previous polling session...");
+  await bot.api.deleteWebhook({ drop_pending_updates: true });
+
+  // Brief pause to let Telegram release the old polling connection
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  // Start polling
+  console.log("Starting polling...");
+  bot.start({
+    drop_pending_updates: true,
+    onStart: () => {
+      markBotReady();
+      console.log("Bot is now running!");
+    },
+  });
 
   // Announce rebirth in Gremlin's Corner (fire-and-forget)
   announceRebirth().catch((err) => {
