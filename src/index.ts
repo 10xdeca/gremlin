@@ -596,28 +596,38 @@ async function main() {
   // Start health check server
   startHealthServer();
 
-  // Delete any lingering webhook and force-close previous polling sessions.
+  // Clear any lingering webhook/polling session, then retry getUpdates
+  // until Telegram releases the old connection. This avoids the 409
+  // "terminated by other getUpdates request" crash on deploy.
   console.log("Clearing previous polling session...");
   await bot.api.deleteWebhook({ drop_pending_updates: true });
 
-  // Wait for Telegram to release the old polling connection.
-  // Docker container recreation can leave a ghost connection for several seconds.
-  console.log("Waiting 15s for old polling session to expire...");
-  await new Promise((resolve) => setTimeout(resolve, 15000));
-
-  // Catch polling errors (e.g. 409 conflict) so they don't crash the process.
-  // grammY emits these on bot.catch() — without this handler, they're unhandled
-  // exceptions that kill Node.
-  bot.catch((err) => {
-    const desc = String(err.error ?? err.message ?? err);
-    if (desc.includes("409") || desc.includes("Conflict")) {
-      console.warn("Polling conflict (409) — will retry automatically:", desc);
-    } else {
-      console.error("Bot error:", err);
+  const MAX_POLL_RETRIES = 6;
+  const POLL_RETRY_DELAY_MS = 10000; // 10 seconds between retries
+  for (let attempt = 1; attempt <= MAX_POLL_RETRIES; attempt++) {
+    try {
+      console.log(`Polling probe attempt ${attempt}/${MAX_POLL_RETRIES}...`);
+      // Short timeout getUpdates to test if the connection is free
+      await bot.api.getUpdates({ offset: -1, limit: 1, timeout: 1 });
+      console.log("Polling probe succeeded — connection is clear.");
+      break;
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("409") && attempt < MAX_POLL_RETRIES) {
+        console.warn(`409 conflict on attempt ${attempt} — waiting ${POLL_RETRY_DELAY_MS / 1000}s...`);
+        await new Promise((resolve) => setTimeout(resolve, POLL_RETRY_DELAY_MS));
+      } else {
+        throw err; // Non-409 error or out of retries — crash and let Docker restart
+      }
     }
+  }
+
+  // Catch middleware errors (message handler errors, not polling errors)
+  bot.catch((err) => {
+    console.error("Bot middleware error:", err);
   });
 
-  // Start polling
+  // Start polling — connection should be clear now
   console.log("Starting polling...");
   bot.start({
     drop_pending_updates: true,
