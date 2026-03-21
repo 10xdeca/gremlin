@@ -589,14 +589,25 @@ async function main() {
   startHealthServer();
 
   // Delete any lingering webhook and force-close previous polling sessions.
-  // Telegram's getUpdates returns 409 if another session is active — this
-  // call with drop_pending_updates clears both the webhook and the update queue,
-  // giving the new polling session a clean slate.
   console.log("Clearing previous polling session...");
   await bot.api.deleteWebhook({ drop_pending_updates: true });
 
-  // Brief pause to let Telegram release the old polling connection
-  await new Promise((resolve) => setTimeout(resolve, 3000));
+  // Wait for Telegram to release the old polling connection.
+  // Docker container recreation can leave a ghost connection for several seconds.
+  console.log("Waiting 10s for old polling session to expire...");
+  await new Promise((resolve) => setTimeout(resolve, 10000));
+
+  // Catch polling errors (e.g. 409 conflict) so they don't crash the process.
+  // grammY emits these on bot.catch() — without this handler, they're unhandled
+  // exceptions that kill Node.
+  bot.catch((err) => {
+    const desc = String(err.error ?? err.message ?? err);
+    if (desc.includes("409") || desc.includes("Conflict")) {
+      console.warn("Polling conflict (409) — will retry automatically:", desc);
+    } else {
+      console.error("Bot error:", err);
+    }
+  });
 
   // Start polling
   console.log("Starting polling...");
