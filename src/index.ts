@@ -142,6 +142,9 @@ bot.on("message:text", async (ctx) => {
   const text = ctx.message?.text;
   if (!chatId || !userId || !text) return;
 
+  // Never respond to own messages
+  if (ctx.from?.is_bot && userId === ctx.me?.id) return;
+
   // Rate limit in group chats
   if (shouldSkipMessage(
     text,
