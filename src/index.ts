@@ -1,5 +1,8 @@
 import "dotenv/config";
 import https from "https";
+import fs from "fs";
+import path from "path";
+import os from "os";
 import { Bot } from "grammy";
 
 // Initialize database
@@ -585,9 +588,10 @@ async function main() {
   // Start health check server
   startHealthServer();
 
-  // Start polling
-  console.log("Starting polling...");
-  bot.start();
+  // Start polling — drop any updates queued while the bot was offline
+  // to avoid a burst of responses to stale messages.
+  console.log("Starting polling (dropping pending updates)...");
+  bot.start({ drop_pending_updates: true });
   markBotReady();
   console.log("Bot is now running!");
 
@@ -597,11 +601,43 @@ async function main() {
   });
 }
 
+/** Cooldown (in ms) to suppress repeated rebirth announcements from rapid restarts. */
+const REBIRTH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const REBIRTH_MARKER_PATH = path.join(os.tmpdir(), "gremlin-last-rebirth");
+
 /**
  * On startup, announce Gremlin's rebirth in every chat's social topic.
  * Uses the agent loop so Gremlin speaks in character and can call get_deploy_info.
+ *
+ * Skipped if a rebirth was announced within the last 10 minutes (guards against
+ * restart loops flooding chats). Set SKIP_REBIRTH_ANNOUNCEMENT=true to disable entirely.
  */
 async function announceRebirth(): Promise<void> {
+  // Allow completely disabling rebirth announcements via env var
+  if (process.env.SKIP_REBIRTH_ANNOUNCEMENT === "true") {
+    console.log("SKIP_REBIRTH_ANNOUNCEMENT is set — skipping rebirth announcement.");
+    return;
+  }
+
+  // Cooldown: skip if last announcement was too recent (rapid restart protection)
+  try {
+    const stat = fs.statSync(REBIRTH_MARKER_PATH);
+    const elapsed = Date.now() - stat.mtimeMs;
+    if (elapsed < REBIRTH_COOLDOWN_MS) {
+      console.log(`Rebirth announced ${Math.round(elapsed / 1000)}s ago (cooldown ${REBIRTH_COOLDOWN_MS / 1000}s) — skipping.`);
+      return;
+    }
+  } catch {
+    // File doesn't exist — first run or marker cleared, proceed
+  }
+
+  // Touch the marker file before announcing (so even if we crash mid-announce, cooldown applies)
+  try {
+    fs.writeFileSync(REBIRTH_MARKER_PATH, String(Date.now()));
+  } catch (err) {
+    console.warn("Failed to write rebirth marker:", err);
+  }
+
   const links = await getAllWorkspaceLinks();
   const socialChats = links.filter((l) => l.socialThreadId);
 
