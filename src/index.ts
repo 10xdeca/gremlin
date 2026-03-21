@@ -561,7 +561,11 @@ async function main() {
   console.log(`Bot verified: @${botInfo.username}`);
 
   // Clear old bot commands menu (all interaction is natural language now)
-  await bot.api.setMyCommands([]);
+  try {
+    await bot.api.setMyCommands([]);
+  } catch (err) {
+    console.warn("setMyCommands failed (non-fatal, likely rate-limited):", (err as Error).message);
+  }
 
   // Start the task checker (overdue, vague, stale, unassigned, no due date)
   startTaskChecker(bot);

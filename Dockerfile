@@ -37,7 +37,7 @@ RUN mkdir -p /app/data
 
 # Set environment defaults
 ENV NODE_ENV=production
-ENV DATABASE_PATH=/app/data/kan-bot.db
+ENV DATABASE_PATH=/app/data/gremlin.db
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
