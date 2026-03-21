@@ -5,6 +5,17 @@ import path from "path";
 import os from "os";
 import { Bot } from "grammy";
 
+// Catch unhandled rejections from grammY's polling loop (409 conflicts etc.)
+// so they don't crash the process. Docker restart handles recovery.
+process.on("unhandledRejection", (err) => {
+  const msg = String(err);
+  if (msg.includes("409") || msg.includes("Conflict")) {
+    console.warn("Polling conflict (409) — suppressed, will retry:", msg);
+    return;
+  }
+  console.error("Unhandled rejection:", err);
+});
+
 // Initialize database
 import "./db/client.js";
 
