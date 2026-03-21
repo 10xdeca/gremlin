@@ -5,15 +5,12 @@ import path from "path";
 import os from "os";
 import { Bot } from "grammy";
 
-// Catch unhandled rejections from grammY's polling loop (409 conflicts etc.)
-// so they don't crash the process. Docker restart handles recovery.
+// Log unhandled rejections before crashing. Don't suppress them —
+// grammY's polling loop needs to crash the process so Docker restarts it.
+// Suppressing 409s silently kills the polling loop while leaving the
+// process alive (bot looks healthy but can't receive messages).
 process.on("unhandledRejection", (err) => {
-  const msg = String(err);
-  if (msg.includes("409") || msg.includes("Conflict")) {
-    console.warn("Polling conflict (409) — suppressed, will retry:", msg);
-    return;
-  }
-  console.error("Unhandled rejection:", err);
+  console.error("Unhandled rejection (will crash):", err);
 });
 
 // Initialize database
@@ -605,8 +602,8 @@ async function main() {
 
   // Wait for Telegram to release the old polling connection.
   // Docker container recreation can leave a ghost connection for several seconds.
-  console.log("Waiting 10s for old polling session to expire...");
-  await new Promise((resolve) => setTimeout(resolve, 10000));
+  console.log("Waiting 15s for old polling session to expire...");
+  await new Promise((resolve) => setTimeout(resolve, 15000));
 
   // Catch polling errors (e.g. 409 conflict) so they don't crash the process.
   // grammY emits these on bot.catch() — without this handler, they're unhandled
