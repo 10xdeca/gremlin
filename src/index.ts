@@ -596,37 +596,28 @@ async function main() {
 
   const webhookUrl = process.env.WEBHOOK_URL;
 
-  let useWebhook = false;
-
   if (webhookUrl) {
-    // --- Attempt webhook mode ---
+    // --- Webhook mode ---
     const webhookSecret = process.env.WEBHOOK_SECRET || crypto.randomBytes(32).toString("hex");
 
+    console.log(`Setting webhook to ${webhookUrl}/webhook ...`);
+    await bot.api.setWebhook(`${webhookUrl}/webhook`, {
+      secret_token: webhookSecret,
+      drop_pending_updates: true,
+    });
+    console.log("Webhook set successfully.");
+
+    // Register grammY's webhook handler AFTER setWebhook succeeds.
+    // webhookCallback() must be called after setWebhook, not before,
+    // because it permanently marks the bot as webhook-mode (blocking bot.start()).
     const handler = webhookCallback(bot, "http", { secretToken: webhookSecret });
     setWebhookHandler(handler);
 
-    try {
-      console.log(`Setting webhook to ${webhookUrl}/webhook ...`);
-      await bot.api.setWebhook(`${webhookUrl}/webhook`, {
-        secret_token: webhookSecret,
-        drop_pending_updates: true,
-      });
-      console.log("Webhook set successfully.");
-      markBotReady();
-      console.log("Bot is now running in webhook mode!");
-      useWebhook = true;
-    } catch (err) {
-      console.warn("Webhook setup failed, falling back to polling:", (err as Error).message);
-      setWebhookHandler(null); // Clear the handler
-    }
-  }
-
-  if (!useWebhook) {
-    // --- Polling mode (fallback) ---
-    if (!webhookUrl) console.log("No WEBHOOK_URL set — using polling mode.");
-
-
-    // Clear any existing webhook before starting polling
+    markBotReady();
+    console.log("Bot is now running in webhook mode!");
+  } else {
+    // --- Polling mode (local dev / no webhook configured) ---
+    console.log("No WEBHOOK_URL set — using polling mode.");
     await bot.api.deleteWebhook({ drop_pending_updates: true });
 
     console.log("Starting polling...");
