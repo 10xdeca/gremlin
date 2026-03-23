@@ -30,7 +30,7 @@ export async function evaluateTaskVagueness(task: TaskInfo): Promise<VaguenessRe
   try {
     const anthropic = await getAnthropicClient();
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001", // TODO: Revert to claude-sonnet-4-6 when OAuth is fixed
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 150,
       messages: [
         {

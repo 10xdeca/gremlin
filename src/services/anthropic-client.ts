@@ -6,6 +6,9 @@ const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"; // Claude Code CLI
 const REFRESH_BUFFER_MS = 60 * 60 * 1000; // Refresh 1 hour before expiry
 
+/** When true, using a static API key — no OAuth refresh needed. */
+const USE_API_KEY = !!process.env.ANTHROPIC_API_KEY;
+
 let cachedClient: Anthropic | null = null;
 let tokenExpiresAt = 0;
 let currentRefreshToken: string | null = null; // Refresh tokens are single-use
@@ -27,6 +30,14 @@ export interface TokenHealth {
 
 /** Returns current token health status for diagnostics and health checks. */
 export function getTokenHealth(): TokenHealth {
+  if (USE_API_KEY) {
+    return {
+      status: "healthy",
+      lastRefresh: lastSuccessfulRefresh,
+      expiresAt: tokenExpiresAt,
+    };
+  }
+
   if (lastRefreshError) {
     return {
       status: "error",
@@ -84,6 +95,20 @@ function isAuthError(status: number): boolean {
  * - Other HTTP/network errors: Transient failure → "token_network" alert
  */
 export async function getAnthropicClient(): Promise<Anthropic> {
+  // API key mode: no OAuth dance, no token expiry to manage
+  if (USE_API_KEY) {
+    if (!cachedClient) {
+      cachedClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+      lastSuccessfulRefresh = Date.now();
+      lastRefreshError = null;
+      // Never expires — set far-future sentinel
+      tokenExpiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
+      console.log("Anthropic client initialized with API key");
+    }
+    return cachedClient;
+  }
+
+  // OAuth mode: refresh access token before expiry
   if (cachedClient && Date.now() < tokenExpiresAt - REFRESH_BUFFER_MS) {
     return cachedClient;
   }
