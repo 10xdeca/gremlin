@@ -228,7 +228,6 @@ function isSkipList(listName: string, ...keywords: string[]): boolean {
   return keywords.some((k) => lower.includes(k));
 }
 
-
 function escapeMarkdown(text: string): string {
   return text.replace(/[_*\[\]()~`>#+=|{}.!-]/g, "\\$&");
 }
@@ -797,8 +796,9 @@ async function checkNoTasks(
       console.log(`Sent no-tasks reminder for ${membersToRemind.length} member(s) to chat ${workspaceLink.telegramChatId}`);
     } catch (agentError) {
       console.warn(`Agent composition failed for no-tasks reminder, falling back to direct send:`, agentError);
+      const escapedMentions = membersToRemind.map((m) => escapeMarkdown(m.mention)).join(", ");
       let message = `${membersToRemind.length} team member${membersToRemind.length === 1 ? " doesn't" : "s don't"} have tasks for the sprint\n\n`;
-      message += `${mentions}\n\n`;
+      message += `${escapedMentions}\n\n`;
       message += `Add your work to the board so we can track it\\!\n\n`;
       message += `[Open workspace](${url})`;
 
