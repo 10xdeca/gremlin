@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.1.0](https://github.com/10xdeca/gremlin/compare/v1.0.0...v1.1.0) (2026-03-25)
+
+
+### Features
+
+* add ANTHROPIC_API_KEY fallback for direct API auth ([a365264](https://github.com/10xdeca/gremlin/commit/a3652640c0083d632cb0e133081905677d7c58e6))
+* background contact scanner and reply-to-image vision ([#70](https://github.com/10xdeca/gremlin/issues/70)) ([#77](https://github.com/10xdeca/gremlin/issues/77)) ([18e8e1d](https://github.com/10xdeca/gremlin/commit/18e8e1d52c0e0a4d85de78f62307d195db88e078))
+* DM onboarding for new group members with Radicale contacts ([#68](https://github.com/10xdeca/gremlin/issues/68)) ([d2e406c](https://github.com/10xdeca/gremlin/commit/d2e406c165023b868c4ce569c47867177a8213cc))
+* inject team roster into system prompt for instant user lookups ([#67](https://github.com/10xdeca/gremlin/issues/67)) ([a3db786](https://github.com/10xdeca/gremlin/commit/a3db786010120949ee4e3fe54fc9648e9d50f924))
+* kickstart onboarding wizard, research delegation, comprehensive docs ([56e77ae](https://github.com/10xdeca/gremlin/commit/56e77ae34c915313f7a89270c9a1890f2dd974b2))
+* webhook mode with graceful fallback to polling ([651f9cb](https://github.com/10xdeca/gremlin/commit/651f9cb01577e08595facf6b619d20e6175a63eb))
+
+
+### Bug Fixes
+
+* batch task reminders to stop repeating per person ([#78](https://github.com/10xdeca/gremlin/issues/78)) ([0d2c7d5](https://github.com/10xdeca/gremlin/commit/0d2c7d56d57ef622eab9b3fefd6aaac4827d5cc4))
+* call webhookCallback after setWebhook to avoid poisoning bot.start ([31cbff3](https://github.com/10xdeca/gremlin/commit/31cbff39db199ef2a2e00d5b7e36409803903c54))
+* catch 409 polling conflicts instead of crashing ([6c6bb0c](https://github.com/10xdeca/gremlin/commit/6c6bb0c1c67b39a378e9c7f6c397c4826886bae6))
+* catch 409 polling crash via process unhandledRejection handler ([bbbc332](https://github.com/10xdeca/gremlin/commit/bbbc332d87728f26c6a6df6f08f89d3ed9e5ac02))
+* clear previous polling session before starting ([7f342c2](https://github.com/10xdeca/gremlin/commit/7f342c2ecd59dfe2819df96b4e84ee6d526aa832))
+* handle setMyCommands rate limit gracefully on startup ([1420342](https://github.com/10xdeca/gremlin/commit/142034264cb5c49eecd7bccef2f1f072e178457b))
+* ignore own messages to prevent self-reply loop ([fbe89c4](https://github.com/10xdeca/gremlin/commit/fbe89c46022748261544da4a34e5102e3f1b8d18))
+* let 409 crash process instead of silently killing polling loop ([58d851a](https://github.com/10xdeca/gremlin/commit/58d851a4ae5b5c50cd7b330d4dcd0e4f117db95f))
+* prevent startup spam from crash loops and stale updates ([0022af3](https://github.com/10xdeca/gremlin/commit/0022af346b6093c6b6bcd89058a9adc322964ed4))
+* probe Telegram connection before starting polling loop ([112804a](https://github.com/10xdeca/gremlin/commit/112804a5c8f474520a34b6c29291f81d49e85785))
+* switch to Haiku 4.5 and update OAuth endpoint for outage recovery ([38620f4](https://github.com/10xdeca/gremlin/commit/38620f429a648628c1a8a69f1414af1ae01d24cd))
+* update system prompt with correct GitHub tool names and remove ToolMaker ([#65](https://github.com/10xdeca/gremlin/issues/65)) ([8b8309f](https://github.com/10xdeca/gremlin/commit/8b8309f77bd901f6fd8ac407d76a548c15a42918))
+* use blocklist for displayName sanitization to preserve i18n characters ([#69](https://github.com/10xdeca/gremlin/issues/69)) ([5f8b102](https://github.com/10xdeca/gremlin/commit/5f8b102befc0ac23150061ca144eaf185461ff01))
+
 ## 1.0.0 (2026-03-13)
 
 
