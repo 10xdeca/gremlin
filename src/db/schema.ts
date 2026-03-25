@@ -139,6 +139,18 @@ export const conversations = sqliteTable("conversations", {
   lastActivity: integer("last_activity", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+// Kickstart onboarding sessions — one active per chat
+export const kickstartSessions = sqliteTable("kickstart_sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  telegramChatId: integer("telegram_chat_id").notNull().unique(),
+  currentStep: integer("current_step").notNull().$defaultFn(() => 1), // 1-6
+  status: text("status").notNull().$defaultFn(() => "active"), // active | completed | abandoned
+  initiatedByUserId: integer("initiated_by_user_id").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  stepData: text("step_data"), // JSON: per-step completion notes for final summary
+});
+
 // Individual messages within a conversation
 export const conversationMessages = sqliteTable("conversation_messages", {
   id: integer("id").primaryKey({ autoIncrement: true }),

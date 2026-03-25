@@ -137,6 +137,17 @@ vi.mock("./db/client.js", async () => {
       UNIQUE(event_uid, telegram_chat_id, reminder_window)
     );
 
+    CREATE TABLE IF NOT EXISTS kickstart_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_chat_id INTEGER NOT NULL UNIQUE,
+      current_step INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'active',
+      initiated_by_user_id INTEGER NOT NULL,
+      started_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      completed_at INTEGER,
+      step_data TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS conversations (
       telegram_chat_id INTEGER PRIMARY KEY,
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -206,6 +217,7 @@ describe("smoke: module imports", () => {
     expect(schema.standupResponses).toBeDefined();
     expect(schema.calendarReminders).toBeDefined();
     expect(schema.oauthTokens).toBeDefined();
+    expect(schema.kickstartSessions).toBeDefined();
   });
 
   it("imports db/queries without errors", async () => {
@@ -320,6 +332,7 @@ describe("smoke: custom tool registration", () => {
     const { registerStandupTools } = await import("./tools/standup.js");
     const { registerDeployInfoTools } = await import("./tools/deploy-info.js");
     const { registerServerOpsTools } = await import("./tools/server-ops.js");
+    const { registerKickstartTools } = await import("./tools/kickstart.js");
 
     // These should not throw
     registerChatConfigTools();
@@ -329,6 +342,7 @@ describe("smoke: custom tool registration", () => {
     registerStandupTools();
     registerDeployInfoTools();
     registerServerOpsTools();
+    registerKickstartTools();
 
     // Verify tools were registered
     const tools = getAnthropicTools();

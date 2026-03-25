@@ -1,6 +1,6 @@
 import { getBotIdentity } from "../services/bot-identity.js";
 import { getSprintInfo } from "../utils/sprint.js";
-import { getStandupConfig, getActiveStandupSession } from "../db/queries.js";
+import { getStandupConfig, getActiveStandupSession, getKickstartSession, getWorkspaceLink } from "../db/queries.js";
 import { getTodayInTimezone } from "../utils/timezone.js";
 import { getGroupContext } from "./conversation-history.js";
 import { getAllUserLinks } from "../db/queries.js";
@@ -143,6 +143,68 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
     }
   }
 
+  // Active kickstart onboarding flow
+  const kickstart = await getKickstartSession(ctx.chatId);
+  if (kickstart) {
+    const stepNames = [
+      "",
+      "Workspace Setup",
+      "Board & Topics",
+      "Team Roster",
+      "Project Seeding",
+      "Standup Config",
+      "Summary & Go",
+    ];
+    const stepInstructions: Record<number, string> = {
+      1: `**Step 1: Workspace Setup**
+List available Kan workspaces using \`kan_list_workspaces\`. Ask the user which workspace this chat should be linked to. Once they choose, call \`link_workspace\` to link it. Then call \`advance_kickstart\` with a note about which workspace was linked.`,
+      2: `**Step 2: Board & Topics**
+Set up the default board for card creation. List the workspace's boards with \`kan_list_boards\`, help the user pick one and a default list, then call \`set_default_board\`.
+Then ask about Telegram topics — which topic for task reminders (\`set_reminder_topic\`) and which for social chat (\`set_social_topic\`). The user needs to tell you the topic/thread IDs (right-click a topic → Copy Link, the last number in the URL is the thread ID).
+Call \`advance_kickstart\` when done.`,
+      3: `**Step 3: Team Roster**
+Map Telegram users to Kan workspace members. Use \`kan_get_workspace\` to see workspace members, then ask the user which Telegram username maps to which Kan member. Use \`set_user_mapping\` for each pair.
+Call \`advance_kickstart\` when the roster is complete or the user says "that's everyone".`,
+      4: `**Step 4: Project Seeding** (skippable)
+Ask what the team is currently working on. Create Kan cards, lists, or boards as needed to represent their active work. Use \`kan_create_card\`, \`kan_create_list\`, etc.
+If the user says "skip", call \`advance_kickstart\` with "Skipped by user" immediately.`,
+      5: `**Step 5: Standup Config** (skippable)
+Set up daily standups. Ask about preferred prompt time, summary time, timezone, and whether to skip weekends. Use \`set_standup_config\`.
+If the user says "skip", call \`advance_kickstart\` with "Skipped by user" immediately.`,
+      6: `**Step 6: Summary & Go**
+Read the kickstart state with \`get_kickstart_state\` to see what was configured in each step. Present a clean summary of the setup. Briefly explain what Gremlin can do now (task management, reminders, standups, wiki search, etc.).
+Then call \`complete_kickstart\` to finish the onboarding flow.`,
+    };
+
+    parts.push("## Active Kickstart — Guided Setup");
+    parts.push(
+      `You are guiding this chat through kickstart setup. **Current: Step ${kickstart.currentStep}/6 — ${stepNames[kickstart.currentStep] ?? "Unknown"}**`
+    );
+    parts.push("");
+    parts.push(
+      stepInstructions[kickstart.currentStep] ??
+        "Unknown step — call `complete_kickstart` to finish."
+    );
+    parts.push("");
+    parts.push("**Kickstart rules:**");
+    parts.push("- Stay focused on the current step. Don't jump ahead.");
+    parts.push("- Be conversational — explain what each step does and why.");
+    parts.push("- If the user says \"skip\", call `advance_kickstart` with \"Skipped by user\".");
+    parts.push("- After completing a step's action, immediately call `advance_kickstart` to move forward.");
+    parts.push("- If the user says \"cancel kickstart\", call `cancel_kickstart`.");
+    parts.push("");
+  }
+
+  // Nudge for unconfigured group chats (no workspace, no active kickstart)
+  if (!ctx.isPrivateChat && ctx.userId !== 0 && !kickstart) {
+    const wsLink = await getWorkspaceLink(ctx.chatId);
+    if (!wsLink && ctx.isAdmin) {
+      parts.push("## Unconfigured Chat");
+      parts.push("This chat has no workspace linked. Suggest running kickstart setup to get everything configured — just say \"let's set up\" or ask the user if they'd like to run through the guided setup.");
+      parts.push("");
+    }
+  }
+
   // Team roster — injected so Gremlin never needs a tool call to know who's who
   const userLinks = await getAllUserLinks();
   if (userLinks.length > 0) {
@@ -166,6 +228,8 @@ You have tools for:
 - **Self-diagnostics**: check MCP server health, read container logs, view container status
 - **GitHub**: read files and browse directories in your own repo (or other org repos), create issues (\`create_github_issue\`), list issues (\`list_github_issues\`) — use these to track bugs, file feature requests, or review open work
 - **Web browsing (Playwright)**: navigate pages, read content, take screenshots, fill forms, generate PDFs — useful for researching topics, verifying links, checking dashboards, or scraping content. Only available when PLAYWRIGHT_ENABLED is set.
+- **Research (A2A)**: delegate deep research to a dedicated agent that searches the web and team wiki. Use the \`research\` tool for questions needing investigation across multiple sources. Only available when RESEARCH_AGENT_URL is set.
+- **Kickstart onboarding**: Guide new groups through a 6-step setup flow (workspace, board/topics, team roster, projects, standups, summary). Start with \`start_kickstart\` when an admin asks to set up the chat (e.g. "let's set up", "kickstart", "get started"). Admin only.
 - **Self-repair**: restart individual MCP servers (kan/outline/radicale/playwright), restart entire container (nuclear option)
 
 ## Guidelines

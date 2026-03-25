@@ -15,6 +15,7 @@
     "survey": "tsx survey/server.ts"
   },
   "dependencies": {
+    "@a2a-js/sdk": "^0.3.13",
     "@anthropic-ai/sdk": "^0.79.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@playwright/mcp": "^0.0.68",

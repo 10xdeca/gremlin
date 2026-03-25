@@ -527,3 +527,97 @@ export async function cleanOldCalendarReminders(daysOld: number = 7): Promise<vo
     .where(lt(schema.calendarReminders.sentAt, cutoff))
     .run();
 }
+
+// Kickstart Sessions
+
+export async function getKickstartSession(telegramChatId: number) {
+  const results = db
+    .select()
+    .from(schema.kickstartSessions)
+    .where(
+      and(
+        eq(schema.kickstartSessions.telegramChatId, telegramChatId),
+        eq(schema.kickstartSessions.status, "active")
+      )
+    )
+    .all();
+  return results[0] || null;
+}
+
+export async function createKickstartSession(data: {
+  telegramChatId: number;
+  initiatedByUserId: number;
+}) {
+  // Abandon any existing active session first
+  db.update(schema.kickstartSessions)
+    .set({ status: "abandoned" })
+    .where(
+      and(
+        eq(schema.kickstartSessions.telegramChatId, data.telegramChatId),
+        eq(schema.kickstartSessions.status, "active")
+      )
+    )
+    .run();
+
+  // Delete the abandoned row so we can insert with UNIQUE constraint
+  db.delete(schema.kickstartSessions)
+    .where(
+      and(
+        eq(schema.kickstartSessions.telegramChatId, data.telegramChatId),
+        eq(schema.kickstartSessions.status, "abandoned")
+      )
+    )
+    .run();
+
+  return db.insert(schema.kickstartSessions).values(data).run();
+}
+
+export async function advanceKickstartStep(
+  telegramChatId: number,
+  stepNote: string
+) {
+  const session = await getKickstartSession(telegramChatId);
+  if (!session) return null;
+
+  // Merge step note into stepData JSON
+  const existing = session.stepData ? JSON.parse(session.stepData) : {};
+  existing[`step${session.currentStep}`] = stepNote;
+
+  return db
+    .update(schema.kickstartSessions)
+    .set({
+      currentStep: session.currentStep + 1,
+      stepData: JSON.stringify(existing),
+    })
+    .where(eq(schema.kickstartSessions.id, session.id))
+    .run();
+}
+
+export async function completeKickstart(telegramChatId: number) {
+  return db
+    .update(schema.kickstartSessions)
+    .set({
+      status: "completed",
+      completedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.kickstartSessions.telegramChatId, telegramChatId),
+        eq(schema.kickstartSessions.status, "active")
+      )
+    )
+    .run();
+}
+
+export async function abandonKickstart(telegramChatId: number) {
+  return db
+    .update(schema.kickstartSessions)
+    .set({ status: "abandoned" })
+    .where(
+      and(
+        eq(schema.kickstartSessions.telegramChatId, telegramChatId),
+        eq(schema.kickstartSessions.status, "active")
+      )
+    )
+    .run();
+}

@@ -125,6 +125,17 @@ sqlite.exec(`
     UNIQUE(event_uid, telegram_chat_id, reminder_window)
   );
 
+  CREATE TABLE IF NOT EXISTS kickstart_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_chat_id INTEGER NOT NULL UNIQUE,
+    current_step INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'active',
+    initiated_by_user_id INTEGER NOT NULL,
+    started_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    completed_at INTEGER,
+    step_data TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS conversations (
     telegram_chat_id INTEGER PRIMARY KEY,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),

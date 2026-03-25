@@ -1,5 +1,7 @@
 # gremlin
 
+**Status: Archived** — Gremlin is no longer actively running but this documents the full architecture.
+
 Telegram bot for Kan.bn task management — full LLM agent with MCP tools. TypeScript + Grammy + Claude Sonnet + SQLite (Drizzle ORM).
 
 ## Build & Run
@@ -39,7 +41,7 @@ Telegram Message → Grammy → Agent Loop (Claude Sonnet + tools) → Response 
 
 - `src/agent/` — Agent loop, MCP manager, tool registry, system prompt, conversation history
 - `src/scanner/` — Background contact scanner (passive image-to-contact pipeline)
-- `src/tools/` — Custom tools (chat-config, user-mapping, sprint-info, bot-identity, github-repo, server-ops, deploy-info, direct-message, standup)
+- `src/tools/` — Custom tools (chat-config, user-mapping, sprint-info, bot-identity, github-repo, server-ops, deploy-info, direct-message, standup, kickstart, research)
 - `src/scheduler/` — Cron-based reminder checks (uses MCP client directly, no LLM)
 - `src/services/` — Bot identity cache, vagueness evaluator
 - `src/db/` — Schema, queries, SQLite client
@@ -75,6 +77,22 @@ When a new user joins the Telegram group, Gremlin automatically:
 3. Falls back to a group welcome in the social topic if DM fails (403)
 
 In private chats, the system prompt includes Radicale contact instructions — Gremlin naturally learns about people (timezone, role, interests) and creates contacts via `radicale_create_contact`. No onboarding state machine; conversation history handles multi-turn. Contacts are stored in Radicale (configured via `RADICALE_ADDRESS_BOOK_URL`), not SQLite.
+
+## Kickstart — Guided Group Setup
+
+A 6-step onboarding wizard for new group chats, triggered by natural language ("let's set up", "kickstart", "get started"). Admin only. State tracked in `kickstart_sessions` table.
+
+**Steps:**
+1. **Workspace Setup** — link Kan workspace
+2. **Board & Topics** — set default board/list, reminder + social topics
+3. **Team Roster** — map Telegram users to Kan members
+4. **Project Seeding** — create initial cards/lists (skippable)
+5. **Standup Config** — configure daily standups (skippable)
+6. **Summary & Go** — recap and complete
+
+The agent drives the conversation; the DB just tracks which step we're on. System prompt injects step-specific instructions when a kickstart is active. Tools: `start_kickstart`, `get_kickstart_state`, `advance_kickstart`, `complete_kickstart`, `cancel_kickstart`.
+
+For unconfigured group chats (no workspace link), the system prompt nudges the agent to suggest kickstart.
 
 ## Background Contact Scanner
 
@@ -135,31 +153,12 @@ See `.env.example` for all required and optional variables. Key additions for th
 - `HEALTH_PORT` — Health check server port (default: 8080)
 - `DEPLOY_SHA` — Git SHA of deployed commit (set by CI)
 
-## Future Directions
+## Unrealised Directions
 
-Planned capabilities and enhancements:
+These were planned but never shipped. Documented here for anyone building something similar.
 
-### GitHub Integration (expand existing tools)
-- **Issue creation** — `create_github_issue` tool so Gremlin can file bugs/tasks directly from Telegram conversations
-- **PR creation** — read code → create branch → open PR workflow, all via GitHub REST API (no git binary needed)
-- PAT already has `contents:write`, `issues:write`, `pull_requests:write` scopes
-
-### Web Search
-- Gremlin can browse specific URLs (Playwright) but can't search the web
-- Add a lightweight search tool wrapping Brave Search API or SearXNG
-- Would make Gremlin significantly more capable for research tasks
-
-### Long-term Memory
-- Currently context resets after 30min TTL
-- Add persistent memory (similar to Claude Code's memory system) for team preferences, recurring topics, project context
-- Could use Outline wiki as backing store (already has MCP tools for it)
-
-### Proactive Insights
-- Gremlin already has scheduler infrastructure (cron for reminders, standups, calendar checks)
-- Extend to proactively surface: undeployed merges, stale sprint cards, upcoming deadlines
-- Use existing MCP tools (Kan, GitHub, Radicale) to gather data, scheduler to trigger checks
-
-### Multi-repo Awareness
-- GitHub tools already support any repo in the org via `repo` parameter
-- Gremlin could cross-reference code across `gremlin`, `mcp-servers`, `kan`, `xdeca-infra`
-- Combined with web search, becomes a genuinely useful research assistant from Telegram
+- **Web search** — Playwright can browse URLs but can't search. A Brave Search or SearXNG wrapper would've made research much more capable.
+- **Persistent memory** — 30min TTL means context resets between sessions. Outline-backed memory (wiki as backing store) was the plan.
+- **Proactive insights** — The scheduler infra (cron + MCP tools) could've surfaced undeployed merges, stale cards, upcoming deadlines without being asked.
+- **PR creation** — GitHub tools support reading code; writing (branch + PR creation) via REST API was next.
+- **Multi-repo awareness** — GitHub tools already accept a `repo` parameter for any org repo. Cross-referencing gremlin + mcp-servers + kan + xdeca-infra would've been powerful.
