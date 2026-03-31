@@ -186,13 +186,17 @@ vi.mock("./agent/mcp-manager.js", () => ({
   },
 }));
 
+// Mock AI SDK — no real API calls
+vi.mock("ai", () => ({
+  generateText: vi.fn(async () => ({ text: "mock", response: { messages: [] }, steps: [] })),
+  generateObject: vi.fn(async () => ({ object: {} })),
+  tool: vi.fn((def: any) => def),
+  jsonSchema: vi.fn((s: any) => s),
+}));
+
 // Mock anthropic client — no real API calls
 vi.mock("./services/anthropic-client.js", () => ({
-  getAnthropicClient: async () => ({
-    messages: { create: async () => ({ content: [{ type: "text", text: "mock" }] }) },
-  }),
-  invalidateCachedClient: () => {},
-  getTokenHealth: () => ({ status: "healthy", lastRefresh: Date.now(), expiresAt: Date.now() + 3600000 }),
+  getModel: vi.fn(() => "mock-model"),
 }));
 
 // Mock admin alerts — no real Telegram messages
@@ -229,8 +233,7 @@ describe("smoke: module imports", () => {
   it("imports agent/tool-registry without errors", async () => {
     const registry = await import("./agent/tool-registry.js");
     expect(typeof registry.registerCustomTool).toBe("function");
-    expect(typeof registry.getAnthropicTools).toBe("function");
-    expect(typeof registry.executeTool).toBe("function");
+    expect(typeof registry.getTools).toBe("function");
   });
 
   it("imports agent/conversation-history without errors", async () => {
@@ -322,7 +325,7 @@ describe("smoke: system prompt builder", () => {
 
 describe("smoke: custom tool registration", () => {
   it("registers all custom tools without errors", async () => {
-    const { registerCustomTool, getAnthropicTools } = await import("./agent/tool-registry.js");
+    const { registerCustomTool, getTools } = await import("./agent/tool-registry.js");
 
     // Import and register all tool modules
     const { registerChatConfigTools } = await import("./tools/chat-config.js");
@@ -344,15 +347,16 @@ describe("smoke: custom tool registration", () => {
     registerServerOpsTools();
     registerKickstartTools();
 
-    // Verify tools were registered
-    const tools = getAnthropicTools();
-    expect(tools.length).toBeGreaterThan(0);
+    // Verify tools were registered — getTools needs chatId + api
+    const fakeApi = { sendChatAction: async () => true } as any;
+    const tools = getTools(12345, fakeApi);
+    const toolNames = Object.keys(tools);
+    expect(toolNames.length).toBeGreaterThan(0);
 
     // Each tool should have required fields
-    for (const tool of tools) {
-      expect(tool.name).toBeTruthy();
-      expect(tool.description).toBeTruthy();
-      expect(tool.input_schema).toBeDefined();
+    for (const name of toolNames) {
+      expect(name).toBeTruthy();
+      expect(tools[name]).toHaveProperty("description");
     }
   });
 });
@@ -376,7 +380,6 @@ describe("smoke: env var documentation", () => {
       "KAN_BASE_URL",
       "OUTLINE_API_KEY",
       "OUTLINE_BASE_URL",
-      "CLAUDE_REFRESH_TOKEN",
       "SPRINT_START_DATE",
       "ADMIN_USER_IDS",
     ];

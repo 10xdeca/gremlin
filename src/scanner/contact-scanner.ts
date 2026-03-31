@@ -1,10 +1,7 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient } from "../services/anthropic-client.js";
+import { generateObject } from "ai";
+import { z } from "zod";
+import { getModel } from "../services/anthropic-client.js";
 import type { ImageAttachment } from "../agent/agent-loop.js";
-
-/** Classification model — cheap and fast for filtering. */
-const CLASSIFY_MODEL = "claude-haiku-4-5-20251001";
-const CLASSIFY_MAX_TOKENS = 512;
 
 /** Concurrency limiter — drop excess scans to avoid overload. */
 let activeScanCount = 0;
@@ -35,6 +32,17 @@ export type SendConfirmation = (
   message: string,
 ) => Promise<void>;
 
+const ClassificationSchema = z.object({
+  hasContacts: z.boolean().describe("Whether the image contains contact information"),
+  contacts: z.array(z.object({
+    name: z.string().optional().describe("Person's name"),
+    email: z.string().optional().describe("Email address"),
+    phone: z.string().optional().describe("Phone number"),
+    organization: z.string().optional().describe("Company or organization"),
+    title: z.string().optional().describe("Job title or role"),
+  })).optional().describe("Extracted contacts, only if hasContacts is true"),
+});
+
 const CLASSIFICATION_PROMPT = `You are a contact information detector. Analyze the image and determine if it contains contact information such as:
 - Business cards
 - Event badges or name tags
@@ -42,10 +50,6 @@ const CLASSIFICATION_PROMPT = `You are a contact information detector. Analyze t
 - Signup sheets or rosters
 - Email signatures
 - Social media profiles with contact info
-
-Respond with ONLY valid JSON (no markdown, no code fences):
-- If NO contact info found: {"hasContacts": false}
-- If contact info found: {"hasContacts": true, "contacts": [{"name": "...", "email": "...", "phone": "...", "organization": "...", "title": "..."}]}
 
 Only include fields that are clearly visible. Do not guess or infer missing fields.`;
 
@@ -82,10 +86,7 @@ async function doScan(
   scanCtx: ScanContext,
   sendConfirmation: SendConfirmation,
 ): Promise<void> {
-  const anthropic = await getAnthropicClient();
-
-  // Classify — does this image contain contact info?
-  const classification = await classify(anthropic, base64, mediaType);
+  const classification = await classify(base64, mediaType);
   if (!classification.hasContacts || !classification.contacts?.length) {
     return;
   }
@@ -94,43 +95,32 @@ async function doScan(
     `Contact scanner: found ${classification.contacts.length} potential contact(s), sending confirmation`,
   );
 
-  // Build a human-readable confirmation message
   const message = formatConfirmation(classification.contacts);
   await sendConfirmation(scanCtx, message);
 }
 
 async function classify(
-  anthropic: Anthropic,
   base64: string,
   mediaType: ImageAttachment["mediaType"],
 ): Promise<ClassificationResult> {
-  const response = await anthropic.messages.create({
-    model: CLASSIFY_MODEL,
-    max_tokens: CLASSIFY_MAX_TOKENS,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mediaType, data: base64 },
-          },
-          { type: "text", text: CLASSIFICATION_PROMPT },
-        ],
-      },
-    ],
-  });
-
-  const text = response.content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-
   try {
-    return JSON.parse(text) as ClassificationResult;
-  } catch {
-    console.warn("Contact scanner: failed to parse classification response:", text);
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: ClassificationSchema,
+      messages: [
+        {
+          role: "user" as const,
+          content: [
+            { type: "image" as const, image: base64, mediaType },
+            { type: "text" as const, text: CLASSIFICATION_PROMPT },
+          ],
+        },
+      ],
+      maxOutputTokens: 512,
+    });
+    return object;
+  } catch (err) {
+    console.warn("Contact scanner: classification failed:", err);
     return { hasContacts: false };
   }
 }

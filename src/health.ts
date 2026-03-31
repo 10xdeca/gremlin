@@ -1,6 +1,5 @@
 import http from "http";
 import { mcpManager } from "./agent/mcp-manager.js";
-import { getTokenHealth } from "./services/anthropic-client.js";
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -71,18 +70,17 @@ async function getHealthStatus(): Promise<{
     servers: mcpHealth,
   };
 
-  // Token/auth
-  const tokenHealth = getTokenHealth();
+  // Auth — Claude Code provider uses CLI auth (claude login)
   components.auth = {
-    status: tokenHealth.status === "healthy" ? "up" : tokenHealth.status,
-    expiresAt: tokenHealth.expiresAt || null,
+    status: "up",
+    mode: "claude-code-cli",
   };
 
   // Overall status
   let status: "healthy" | "degraded" | "unhealthy" = "healthy";
   if (!botActive) {
     status = "unhealthy";
-  } else if (!allHealthy || tokenHealth.status !== "healthy") {
+  } else if (!allHealthy) {
     status = "degraded";
   }
 

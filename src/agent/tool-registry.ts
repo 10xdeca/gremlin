@@ -1,4 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import { tool, jsonSchema } from "ai";
+import type { ToolSet } from "ai";
+import type { Api } from "grammy";
 import { mcpManager, type McpTool } from "./mcp-manager.js";
 
 /** A custom (non-MCP) tool definition. */
@@ -16,53 +18,61 @@ export function registerCustomTool(tool: CustomToolDef): void {
   customTools.set(tool.name, tool);
 }
 
-/**
- * Build the `tools` array for `anthropic.messages.create()`.
- * Merges MCP-discovered tools + registered custom tools.
- */
-export function getAnthropicTools(): Anthropic.Messages.Tool[] {
-  const tools: Anthropic.Messages.Tool[] = [];
+/** Fire-and-forget typing indicator. */
+function sendTyping(api: Api, chatId: number): void {
+  api.sendChatAction(chatId, "typing").catch(() => {
+    // Typing indicator failures are not critical
+  });
+}
 
-  // MCP tools
+/**
+ * Build the tools record for generateText().
+ * Each tool has its execute function baked in — the SDK calls it automatically.
+ * Typing indicators fire at the start of each tool execution.
+ */
+export function getTools(chatId: number, api: Api): ToolSet {
+  const tools: ToolSet = {};
+
+  // MCP tools — route execution through mcpManager
   for (const mcpTool of mcpManager.getAllTools()) {
-    tools.push(mcpToolToAnthropic(mcpTool));
+    const name = mcpTool.name;
+    tools[name] = tool({
+      description: mcpTool.description,
+      inputSchema: jsonSchema(mcpTool.inputSchema as Parameters<typeof jsonSchema>[0]),
+      execute: async (args: Record<string, unknown>) => {
+        sendTyping(api, chatId);
+        console.log(`Tool call: ${name}(${JSON.stringify(args)})`);
+        try {
+          return await mcpManager.callTool(name, args);
+        } catch (err) {
+          const msg = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`Tool ${name} failed:`, err);
+          return msg;
+        }
+      },
+    });
   }
 
-  // Custom tools
+  // Custom tools — use their handler directly
   for (const custom of customTools.values()) {
-    tools.push({
-      name: custom.name,
+    const name = custom.name;
+    const handler = custom.handler;
+    tools[name] = tool({
       description: custom.description,
-      input_schema: custom.inputSchema as Anthropic.Messages.Tool["input_schema"],
+      inputSchema: jsonSchema(custom.inputSchema as Parameters<typeof jsonSchema>[0]),
+      execute: async (args: Record<string, unknown>) => {
+        sendTyping(api, chatId);
+        console.log(`Tool call: ${name}(${JSON.stringify(args)})`);
+        try {
+          return await handler(args);
+        } catch (err) {
+          const msg = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`Tool ${name} failed:`, err);
+          return msg;
+        }
+      },
     });
   }
 
   return tools;
-}
-
-/**
- * Execute a tool call — routes to MCP server or custom handler.
- * Returns the text result.
- */
-export async function executeTool(
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<string> {
-  // Check custom tools first (fast path)
-  const custom = customTools.get(toolName);
-  if (custom) {
-    return custom.handler(args);
-  }
-
-  // Route to MCP
-  return mcpManager.callTool(toolName, args);
-}
-
-/** Convert an MCP tool schema to Anthropic tool format. */
-export function mcpToolToAnthropic(tool: McpTool): Anthropic.Messages.Tool {
-  return {
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.inputSchema as Anthropic.Messages.Tool["input_schema"],
-  };
 }

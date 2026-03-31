@@ -36,8 +36,6 @@ import { registerKickstartTools } from "./tools/kickstart.js";
 import { startTaskChecker } from "./scheduler/task-checker.js";
 import { startStandupChecker } from "./scheduler/standup-checker.js";
 import { startCalendarChecker } from "./scheduler/calendar-checker.js";
-import { startTokenHealthChecker } from "./scheduler/token-health.js";
-
 // Health check server
 import { startHealthServer, setWebhookHandler, markBotReady, recordMessageProcessed } from "./health.js";
 
@@ -591,9 +589,6 @@ async function main() {
 
   // Start the calendar checker (event reminders at 24h, 1h, 15m)
   startCalendarChecker(bot);
-
-  // Start the token health checker (proactive auth validation every 4h)
-  startTokenHealthChecker();
 
   // Start health check server (also serves webhook endpoint when configured)
   startHealthServer();

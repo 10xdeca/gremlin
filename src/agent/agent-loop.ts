@@ -1,16 +1,13 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import type { Api } from "grammy";
-import { getAnthropicTools, executeTool } from "./tool-registry.js";
+import type { ModelMessage } from "ai";
+import { generateText, stepCountIs } from "ai";
+import { getModel } from "../services/anthropic-client.js";
+import { getTools } from "./tool-registry.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { getHistory, appendToHistory } from "./conversation-history.js";
-import {
-  getAnthropicClient,
-  invalidateCachedClient,
-} from "../services/anthropic-client.js";
 import { alertAdmins } from "../services/admin-alerts.js";
 
-const MODEL = "claude-haiku-4-5-20251001";
-const MAX_TOOL_ROUNDS = 10;
+const MAX_STEPS = 10;
 const MAX_TOKENS = 2048;
 
 export interface ImageAttachment {
@@ -39,8 +36,7 @@ interface AgentInput {
 }
 
 /**
- * Check whether an error is an Anthropic API auth failure (401).
- * The SDK throws errors with a `status` property for HTTP-level failures.
+ * Check whether an error is an API auth failure (401).
  */
 function isApiAuthError(err: unknown): boolean {
   return (
@@ -52,23 +48,16 @@ function isApiAuthError(err: unknown): boolean {
 }
 
 /**
- * Run the agent loop: send message to Claude, execute tool calls, return final text.
- * Sends typing indicators while working.
+ * Run the agent loop: send message to Claude via Vercel AI SDK, return final text.
+ * The SDK handles the tool call loop automatically via maxSteps.
  */
 export async function runAgentLoop(
   api: Api,
   input: AgentInput
 ): Promise<string> {
-  let anthropic: Anthropic;
-  try {
-    anthropic = await getAnthropicClient();
-  } catch (err) {
-    // getAnthropicClient already logs and alerts admins
-    console.error("Failed to get Anthropic client:", err);
-    return "I'm having trouble with my brain connection right now. The team has been notified.";
-  }
+  const model = getModel();
+  const tools = input.isSystemInitiated ? {} : getTools(input.chatId, api);
 
-  const tools = input.isSystemInitiated ? [] : getAnthropicTools();
   // Telegram convention: in private chats, chatId === userId.
   // Allow explicit override for system-initiated DMs (userId=0).
   const isPrivateChat = input.isPrivateChat ?? input.chatId === input.userId;
@@ -86,153 +75,90 @@ export async function runAgentLoop(
 
   // Build messages: history + current user message
   const history = getHistory(input.chatId);
-  const userContent: Anthropic.Messages.ContentBlockParam[] = [];
-
-  // Add images first so Claude sees them before the text
-  if (input.images?.length) {
-    for (const img of input.images) {
-      userContent.push({
-        type: "image",
-        source: { type: "base64", media_type: img.mediaType, data: img.base64 },
-      });
-    }
-  }
-
-  userContent.push({ type: "text", text: input.text || "(no caption)" });
-
-  const userMessage: Anthropic.Messages.MessageParam = {
-    role: "user",
-    content: input.images?.length ? userContent : input.text,
-  };
-  const messages: Anthropic.Messages.MessageParam[] = [...history, userMessage];
+  const userMessage = buildUserMessage(input);
+  const messages: ModelMessage[] = [...history, userMessage];
 
   // Send initial typing indicator
   sendTyping(api, input.chatId);
 
-  let response: Anthropic.Messages.Message;
-  let rounds = 0;
+  try {
+    const result = await generateText({
+      model,
+      system: systemPrompt,
+      messages,
+      tools,
+      stopWhen: stepCountIs(MAX_STEPS),
+      maxOutputTokens: MAX_TOKENS,
+      onStepFinish: () => {
+        sendTyping(api, input.chatId);
+      },
+    });
 
-  // Agent loop — keep calling Claude until we get a final text response
-  while (rounds < MAX_TOOL_ROUNDS) {
-    rounds++;
+    const text = result.text || "I ran into too many steps trying to complete that. Could you try a simpler request?";
 
-    try {
-      response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: systemPrompt,
-        ...(tools.length > 0 ? { tools } : {}),
-        messages,
-      });
-    } catch (err) {
-      if (isApiAuthError(err)) {
-        // Access token rejected mid-session — force re-auth on next call
-        console.error("Anthropic API returned 401 during messages.create:", err);
-        invalidateCachedClient();
-        alertAdmins(
-          "token_auth",
-          "Access token rejected by Anthropic API during a conversation. Client cache invalidated — next request will attempt re-auth."
-        );
-        return "I'm having trouble with my brain connection right now. The team has been notified.";
-      }
-      // Non-auth API error — let it propagate to the outer catch in index.ts
-      throw err;
+    // Build turn for history: user message + response messages from the SDK
+    const turnMessages: ModelMessage[] = [
+      stripImagesFromMessage(userMessage),
+      ...result.response.messages,
+    ];
+    appendToHistory(input.chatId, turnMessages, input.userId);
+
+    return text;
+  } catch (err) {
+    if (isApiAuthError(err)) {
+      console.error("API returned 401 during generateText:", err);
+      alertAdmins(
+        "token_auth",
+        "API key rejected by Anthropic during a conversation."
+      );
+      return "I'm having trouble with my brain connection right now. The team has been notified.";
     }
-
-    // Check if there are tool calls
-    const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use"
-    );
-
-    if (toolUseBlocks.length === 0) {
-      // No tool calls — extract final text and return
-      const text = extractText(response.content);
-      // Capture the full turn: everything added since history ended
-      const turnMessages = stripImagesFromTurn(messages.slice(history.length));
-      turnMessages.push({ role: "assistant", content: text });
-      appendToHistory(input.chatId, turnMessages, input.userId);
-      return text;
-    }
-
-    // There are tool calls — execute them and continue the loop
-    // Add assistant response (with tool_use blocks) to messages
-    messages.push({ role: "assistant", content: response.content });
-
-    // Execute all tool calls
-    const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
-    for (const toolUse of toolUseBlocks) {
-      // Keep typing while working
-      sendTyping(api, input.chatId);
-
-      let result: string;
-      let isError = false;
-      try {
-        console.log(`Tool call: ${toolUse.name}(${JSON.stringify(toolUse.input)})`);
-        result = await executeTool(
-          toolUse.name,
-          toolUse.input as Record<string, unknown>
-        );
-      } catch (err) {
-        result = `Error: ${err instanceof Error ? err.message : String(err)}`;
-        isError = true;
-        console.error(`Tool ${toolUse.name} failed:`, err);
-      }
-
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: toolUse.id,
-        content: result,
-        is_error: isError,
-      });
-    }
-
-    // Add tool results to messages
-    messages.push({ role: "user", content: toolResults });
+    // Non-auth API error — let it propagate to the outer catch in index.ts
+    throw err;
   }
-
-  // Exhausted tool rounds — cap with text-only assistant message.
-  // Don't store unfulfilled tool_use blocks from response — they'd lack matching tool_results.
-  const fallbackText = extractText(response!.content);
-  const cappingText = fallbackText || "I ran into too many steps trying to complete that. Could you try a simpler request?";
-  const turnMessages = stripImagesFromTurn(messages.slice(history.length));
-  turnMessages.push({ role: "assistant", content: cappingText });
-  appendToHistory(input.chatId, turnMessages, input.userId);
-  return cappingText;
 }
 
-/** Extract text content from Claude response blocks. */
-function extractText(content: Anthropic.Messages.ContentBlock[]): string {
-  return content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+/** Build a user message with optional image attachments. */
+function buildUserMessage(input: AgentInput): ModelMessage {
+  if (input.images?.length) {
+    const content: Array<{ type: "text"; text: string } | { type: "image"; image: string; mediaType: string }> = [];
+
+    // Add images first so Claude sees them before the text
+    for (const img of input.images) {
+      content.push({
+        type: "image",
+        image: img.base64,
+        mediaType: img.mediaType,
+      });
+    }
+
+    content.push({ type: "text", text: input.text || "(no caption)" });
+
+    return { role: "user", content } as ModelMessage;
+  }
+
+  return { role: "user", content: input.text };
 }
 
 /**
- * Strip image blocks from turn messages before storing in history/DB.
- * Replaces multimodal user content with just the text portion to avoid
+ * Strip image parts from a user message before storing in history.
+ * Replaces multimodal content with just the text portion to avoid
  * bloating the database with base64 image data.
  */
-function stripImagesFromTurn(
-  messages: Anthropic.Messages.MessageParam[],
-): Anthropic.Messages.MessageParam[] {
-  return messages.map((msg) => {
-    if (msg.role !== "user" || typeof msg.content === "string") return msg;
+function stripImagesFromMessage(msg: ModelMessage): ModelMessage {
+  if (msg.role !== "user" || typeof msg.content === "string") return msg;
 
-    const blocks = msg.content as Anthropic.Messages.ContentBlockParam[];
-    // If content has image blocks, extract just the text
-    const hasImages = blocks.some((b) => b.type === "image");
-    if (!hasImages) return msg;
+  const blocks = msg.content as Array<{ type: string; text?: string }>;
+  const hasImages = blocks.some((b) => b.type === "image");
+  if (!hasImages) return msg;
 
-    const textParts = blocks
-      .filter((b): b is Anthropic.Messages.TextBlockParam => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
+  const textParts = blocks
+    .filter((b) => b.type === "text" && b.text)
+    .map((b) => b.text!)
+    .join("\n")
+    .trim();
 
-    return { role: "user" as const, content: textParts || "[image]" };
-  });
+  return { role: "user", content: textParts || "[image]" };
 }
 
 /** Fire-and-forget typing indicator. */

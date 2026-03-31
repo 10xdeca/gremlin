@@ -1,19 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type Anthropic from "@anthropic-ai/sdk";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before importing the module under test
 // ---------------------------------------------------------------------------
 
-const mockCreate = vi.fn();
-const mockInvalidate = vi.fn();
+const mockGenerateText = vi.fn();
 const mockAlertAdmins = vi.fn();
 
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: (...args: unknown[]) => mockGenerateText(...args),
+  };
+});
+
 vi.mock("../services/anthropic-client.js", () => ({
-  getAnthropicClient: vi.fn(async () => ({
-    messages: { create: mockCreate },
-  })),
-  invalidateCachedClient: (...args: unknown[]) => mockInvalidate(...args),
+  getModel: vi.fn(() => "mock-model"),
 }));
 
 vi.mock("./system-prompt.js", () => ({
@@ -29,23 +32,21 @@ vi.mock("../services/admin-alerts.js", () => ({
   alertAdmins: (...args: unknown[]) => mockAlertAdmins(...args),
 }));
 
-// Mock tool-registry: one dummy tool, controllable executeTool
-const mockExecuteTool = vi.fn();
+// Mock tool-registry: returns a tools record
+const mockGetTools = vi.fn(() => ({
+  kan_search_cards: {
+    description: "Search Kan cards",
+    parameters: { type: "object", properties: { query: { type: "string" } } },
+    execute: vi.fn(),
+  },
+}));
 vi.mock("./tool-registry.js", () => ({
-  getAnthropicTools: vi.fn(() => [
-    {
-      name: "kan_search_cards",
-      description: "Search Kan cards",
-      input_schema: { type: "object", properties: { query: { type: "string" } } },
-    },
-  ]),
-  executeTool: (...args: unknown[]) => mockExecuteTool(...args),
+  getTools: (...args: unknown[]) => mockGetTools(...args),
 }));
 
 // Now import the module under test
 import { runAgentLoop } from "./agent-loop.js";
 import { getHistory, appendToHistory } from "./conversation-history.js";
-import { getAnthropicClient } from "../services/anthropic-client.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,42 +69,35 @@ const fakeApi = {
   sendChatAction: vi.fn(async () => true),
 } as any;
 
-/** Build an Anthropic-style response with text-only content. */
-function textResponse(text: string): Anthropic.Messages.Message {
+/** Build a mock generateText result with text-only response. */
+function textResult(text: string) {
   return {
-    id: "msg_test",
-    type: "message",
-    role: "assistant",
-    model: "claude-haiku-4-5-20251001",
-    content: [{ type: "text", text }],
-    stop_reason: "end_turn",
-    stop_sequence: null,
-    usage: { input_tokens: 10, output_tokens: 5 },
+    text,
+    response: {
+      messages: [{ role: "assistant", content: text }],
+    },
+    steps: [],
+    finishReason: "stop",
+    usage: { promptTokens: 10, completionTokens: 5 },
   };
 }
 
-/** Build an Anthropic-style response that includes a tool_use block. */
-function toolUseResponse(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  toolUseId = "toolu_test_1",
-): Anthropic.Messages.Message {
+/** Build a mock generateText result with tool calls and final text. */
+function toolCallResult(finalText: string, toolCalls: Array<{ toolName: string; args: Record<string, unknown> }> = []) {
   return {
-    id: "msg_test",
-    type: "message",
-    role: "assistant",
-    model: "claude-haiku-4-5-20251001",
-    content: [
-      {
-        type: "tool_use",
-        id: toolUseId,
-        name: toolName,
-        input: toolInput,
-      },
-    ],
-    stop_reason: "tool_use",
-    stop_sequence: null,
-    usage: { input_tokens: 10, output_tokens: 15 },
+    text: finalText,
+    response: {
+      messages: [
+        { role: "assistant", content: finalText },
+      ],
+    },
+    steps: toolCalls.map((tc) => ({
+      toolCalls: [{ toolName: tc.toolName, args: tc.args, toolCallId: "toolu_test" }],
+      toolResults: [{ toolCallId: "toolu_test", result: "mock_result" }],
+      text: "",
+    })),
+    finishReason: "stop",
+    usage: { promptTokens: 20, completionTokens: 15 },
   };
 }
 
@@ -119,136 +113,81 @@ describe("agent-loop integration", () => {
   // ── 1. Simple text response (no tools) ──────────────────────────────────
 
   it("returns text response when Claude does not call tools", async () => {
-    mockCreate.mockResolvedValueOnce(textResponse("Hello from Gremlin!"));
+    mockGenerateText.mockResolvedValueOnce(textResult("Hello from Gremlin!"));
 
     const result = await runAgentLoop(fakeApi, input("Hi there"));
 
     expect(result).toBe("Hello from Gremlin!");
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-    expect(mockExecuteTool).not.toHaveBeenCalled();
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
     expect(appendToHistory).toHaveBeenCalledOnce();
   });
 
-  // ── 2. Single tool call round ───────────────────────────────────────────
+  // ── 2. Tool calls are routed through the SDK ───────────────────────────
 
-  it("executes a single tool call and returns final text", async () => {
-    // First Claude response: call a tool
-    mockCreate.mockResolvedValueOnce(
-      toolUseResponse("kan_search_cards", { query: "overdue" }),
-    );
-    // Tool returns a result
-    mockExecuteTool.mockResolvedValueOnce(
-      JSON.stringify([{ title: "Fix login", publicId: "card_123" }]),
-    );
-    // Second Claude response: final text after seeing tool result
-    mockCreate.mockResolvedValueOnce(
-      textResponse("Found 1 overdue card: Fix login"),
+  it("passes tools to generateText and returns final text", async () => {
+    mockGenerateText.mockResolvedValueOnce(
+      toolCallResult("Found 1 overdue card: Fix login", [
+        { toolName: "kan_search_cards", args: { query: "overdue" } },
+      ]),
     );
 
     const result = await runAgentLoop(fakeApi, input("Show overdue tasks"));
 
     expect(result).toBe("Found 1 overdue card: Fix login");
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-    expect(mockExecuteTool).toHaveBeenCalledWith("kan_search_cards", { query: "overdue" });
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+
+    // Verify tools were passed to generateText
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.tools).toHaveProperty("kan_search_cards");
   });
 
-  // ── 3. Multi-round tool calls ───────────────────────────────────────────
+  // ── 3. stopWhen is configured ────────────────────────────────────────
 
-  it("handles multiple rounds of tool calls", async () => {
-    // Round 1: search cards
-    mockCreate.mockResolvedValueOnce(
-      toolUseResponse("kan_search_cards", { query: "login" }, "toolu_r1"),
-    );
-    mockExecuteTool.mockResolvedValueOnce('{"cards": []}');
+  it("sets stopWhen for tool loop control", async () => {
+    mockGenerateText.mockResolvedValueOnce(textResult("Done"));
 
-    // Round 2: search again with different query
-    mockCreate.mockResolvedValueOnce(
-      toolUseResponse("kan_search_cards", { query: "auth" }, "toolu_r2"),
-    );
-    mockExecuteTool.mockResolvedValueOnce('{"cards": [{"title": "Auth bug"}]}');
+    await runAgentLoop(fakeApi, input("Do something"));
 
-    // Round 3: final text
-    mockCreate.mockResolvedValueOnce(
-      textResponse("Found an auth bug card."),
-    );
-
-    const result = await runAgentLoop(fakeApi, input("Find login related tasks"));
-
-    expect(result).toBe("Found an auth bug card.");
-    expect(mockCreate).toHaveBeenCalledTimes(3);
-    expect(mockExecuteTool).toHaveBeenCalledTimes(2);
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.stopWhen).toBeDefined();
   });
 
-  // ── 4. Tool execution error handling ────────────────────────────────────
+  // ── 4. Auth failure handling (401 from API) ────────────────────────────
 
-  it("recovers gracefully when a tool throws an error", async () => {
-    // Claude calls a tool
-    mockCreate.mockResolvedValueOnce(
-      toolUseResponse("kan_search_cards", { query: "broken" }),
-    );
-    // Tool throws
-    mockExecuteTool.mockRejectedValueOnce(new Error("MCP server unreachable"));
-    // Claude handles the error and responds
-    mockCreate.mockResolvedValueOnce(
-      textResponse("Sorry, I couldn't search cards right now."),
-    );
-
-    const result = await runAgentLoop(fakeApi, input("Search for broken tasks"));
-
-    expect(result).toBe("Sorry, I couldn't search cards right now.");
-    expect(mockCreate).toHaveBeenCalledTimes(2);
-
-    // Verify the error was passed back to Claude as a tool_result with is_error
-    const secondCallMessages = mockCreate.mock.calls[1][0].messages;
-    const lastUserMsg = secondCallMessages[secondCallMessages.length - 1];
-    expect(lastUserMsg.role).toBe("user");
-    const toolResult = lastUserMsg.content[0];
-    expect(toolResult.type).toBe("tool_result");
-    expect(toolResult.is_error).toBe(true);
-    expect(toolResult.content).toContain("MCP server unreachable");
-  });
-
-  // ── 5. Auth failure handling (401 from Claude API) ──────────────────────
-
-  it("handles 401 auth errors from Claude API", async () => {
+  it("handles 401 auth errors from the API", async () => {
     const authError = new Error("Unauthorized") as Error & { status: number };
     authError.status = 401;
-    mockCreate.mockRejectedValueOnce(authError);
+    mockGenerateText.mockRejectedValueOnce(authError);
 
     const result = await runAgentLoop(fakeApi, input("Hello"));
 
     expect(result).toContain("trouble with my brain connection");
-    expect(mockInvalidate).toHaveBeenCalledOnce();
     expect(mockAlertAdmins).toHaveBeenCalledWith(
       "token_auth",
-      expect.stringContaining("Access token rejected"),
+      expect.stringContaining("API key rejected"),
     );
   });
 
-  // ── 6. Max tool rounds exceeded ─────────────────────────────────────────
+  // ── 5. Max steps exhaustion returns fallback ───────────────────────────
 
-  it("caps at MAX_TOOL_ROUNDS and returns fallback text", async () => {
-    // Every Claude response calls a tool — should hit the 10-round limit
-    for (let i = 0; i < 10; i++) {
-      mockCreate.mockResolvedValueOnce(
-        toolUseResponse("kan_search_cards", { query: `round_${i}` }, `toolu_${i}`),
-      );
-      mockExecuteTool.mockResolvedValueOnce(`result_${i}`);
-    }
+  it("returns fallback when generateText returns empty text", async () => {
+    mockGenerateText.mockResolvedValueOnce({
+      text: "",
+      response: { messages: [] },
+      steps: [],
+      finishReason: "tool-calls",
+    });
 
     const result = await runAgentLoop(fakeApi, input("Loop forever"));
 
-    expect(mockCreate).toHaveBeenCalledTimes(10);
-    expect(mockExecuteTool).toHaveBeenCalledTimes(10);
-    // Should return the fallback capping message
     expect(result).toContain("too many steps");
   });
 
-  // ── 7. System-initiated messages (no tools available) ───────────────────
+  // ── 6. System-initiated messages (no tools available) ──────────────────
 
   it("skips tools for system-initiated messages", async () => {
-    mockCreate.mockResolvedValueOnce(
-      textResponse("Reminder: you have overdue tasks!"),
+    mockGenerateText.mockResolvedValueOnce(
+      textResult("Reminder: you have overdue tasks!"),
     );
 
     const result = await runAgentLoop(
@@ -258,16 +197,16 @@ describe("agent-loop integration", () => {
 
     expect(result).toBe("Reminder: you have overdue tasks!");
 
-    // Verify tools were NOT passed to the Claude API call
-    const createArgs = mockCreate.mock.calls[0][0];
-    expect(createArgs.tools).toBeUndefined();
+    // Verify empty tools object was passed
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.tools).toEqual({});
   });
 
-  // ── 8. Image attachment handling ────────────────────────────────────────
+  // ── 7. Image attachment handling ───────────────────────────────────────
 
-  it("passes images to Claude and strips them from history", async () => {
-    mockCreate.mockResolvedValueOnce(
-      textResponse("I see a screenshot of a login page."),
+  it("passes images to generateText and strips them from history", async () => {
+    mockGenerateText.mockResolvedValueOnce(
+      textResult("I see a screenshot of a login page."),
     );
 
     const result = await runAgentLoop(
@@ -284,90 +223,77 @@ describe("agent-loop integration", () => {
 
     expect(result).toBe("I see a screenshot of a login page.");
 
-    // Verify image was included in the API call
-    const createArgs = mockCreate.mock.calls[0][0];
-    const userMsg = createArgs.messages[createArgs.messages.length - 1];
+    // Verify image was included in the messages passed to generateText
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    const msgs = callArgs.messages;
+    const userMsg = msgs[msgs.length - 1];
     expect(Array.isArray(userMsg.content)).toBe(true);
     const imageBlock = userMsg.content.find((b: any) => b.type === "image");
     expect(imageBlock).toBeDefined();
-    expect(imageBlock.source.media_type).toBe("image/png");
 
     // Verify images are stripped from the history that was appended
     const appendCall = (appendToHistory as any).mock.calls[0];
     const storedMessages = appendCall[1];
-    // The user message in stored history should NOT have image blocks
     const storedUserMsg = storedMessages.find((m: any) => m.role === "user");
     if (typeof storedUserMsg.content === "string") {
-      // Good — images were stripped to plain text
       expect(storedUserMsg.content).not.toContain("iVBORw0KGgo");
     } else {
-      // If it's still an array, it should not contain image blocks
       const hasImage = storedUserMsg.content.some((b: any) => b.type === "image");
       expect(hasImage).toBe(false);
     }
   });
 
-  // ── 9. Conversation history is included in API call ─────────────────────
+  // ── 8. Conversation history is included ────────────────────────────────
 
   it("includes conversation history from getHistory()", async () => {
-    // Simulate existing history
     (getHistory as any).mockReturnValueOnce([
       { role: "user", content: "Previous question" },
       { role: "assistant", content: "Previous answer" },
     ]);
 
-    mockCreate.mockResolvedValueOnce(textResponse("Follow-up answer"));
+    mockGenerateText.mockResolvedValueOnce(textResult("Follow-up answer"));
 
     await runAgentLoop(fakeApi, input("Follow-up question"));
 
-    const createArgs = mockCreate.mock.calls[0][0];
-    expect(createArgs.messages).toHaveLength(3); // 2 history + 1 new
-    expect(createArgs.messages[0].content).toBe("Previous question");
-    expect(createArgs.messages[1].content).toBe("Previous answer");
-    expect(createArgs.messages[2].content).toBe("Follow-up question");
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.messages).toHaveLength(3); // 2 history + 1 new
+    expect(callArgs.messages[0].content).toBe("Previous question");
+    expect(callArgs.messages[1].content).toBe("Previous answer");
+    expect(callArgs.messages[2].content).toBe("Follow-up question");
   });
 
-  // ── 10. Typing indicators are sent ──────────────────────────────────────
+  // ── 9. Typing indicators are sent ──────────────────────────────────────
 
   it("sends typing indicators during processing", async () => {
-    mockCreate.mockResolvedValueOnce(
-      toolUseResponse("kan_search_cards", { query: "test" }),
-    );
-    mockExecuteTool.mockResolvedValueOnce("result");
-    mockCreate.mockResolvedValueOnce(textResponse("Done"));
+    mockGenerateText.mockResolvedValueOnce(textResult("Done"));
 
     await runAgentLoop(fakeApi, input("Do something"));
 
-    // At least 2 typing indicators: initial + during tool execution
+    // At least 1 typing indicator (initial)
     expect(fakeApi.sendChatAction).toHaveBeenCalled();
     expect(fakeApi.sendChatAction.mock.calls[0][1]).toBe("typing");
   });
 
-  // ── 11. getAnthropicClient failure ──────────────────────────────────────
-
-  it("returns error message when Anthropic client cannot be obtained", async () => {
-    (getAnthropicClient as any).mockRejectedValueOnce(
-      new Error("No refresh token available"),
-    );
-
-    const result = await runAgentLoop(fakeApi, input("Hello"));
-
-    expect(result).toContain("trouble with my brain connection");
-    expect(mockCreate).not.toHaveBeenCalled();
-  });
-
-  // ── 12. Non-auth API errors propagate ───────────────────────────────────
+  // ── 10. Non-auth API errors propagate ──────────────────────────────────
 
   it("throws non-auth API errors (e.g. 500) to be caught by caller", async () => {
     const serverError = new Error("Internal Server Error") as Error & { status: number };
     serverError.status = 500;
-    mockCreate.mockRejectedValueOnce(serverError);
+    mockGenerateText.mockRejectedValueOnce(serverError);
 
     await expect(
       runAgentLoop(fakeApi, input("Hello")),
     ).rejects.toThrow("Internal Server Error");
+  });
 
-    // Should NOT invalidate client for non-auth errors
-    expect(mockInvalidate).not.toHaveBeenCalled();
+  // ── 11. System prompt is passed ────────────────────────────────────────
+
+  it("passes system prompt to generateText", async () => {
+    mockGenerateText.mockResolvedValueOnce(textResult("OK"));
+
+    await runAgentLoop(fakeApi, input("Hello"));
+
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.system).toBe("You are Gremlin, a test bot.");
   });
 });

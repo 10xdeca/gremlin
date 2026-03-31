@@ -1,6 +1,6 @@
 # gremlin
 
-**Status: Archived** — Gremlin is no longer actively running but this documents the full architecture.
+**Status: Active** — Telegram bot for Kan.bn task management.
 
 Telegram bot for Kan.bn task management — full LLM agent with MCP tools. TypeScript + Grammy + Claude Sonnet + SQLite (Drizzle ORM).
 

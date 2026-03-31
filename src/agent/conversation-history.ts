@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ModelMessage } from "ai";
 import { eq, desc } from "drizzle-orm";
 import { db, schema, sqlite } from "../db/client.js";
 
@@ -10,15 +10,15 @@ import { db, schema, sqlite } from "../db/client.js";
 const MAX_MESSAGES = 40;
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
-/** Maximum length for tool_result content blocks stored in DB. */
+/** Maximum length for tool result content stored in DB. */
 const MAX_TOOL_RESULT_LENGTH = 4000;
 
 /**
  * In-memory history tracks complete turns (each sub-array is one user→response cycle).
- * getHistory() flattens turns for the Claude API.
+ * getHistory() flattens turns for the AI SDK.
  */
 interface ChatHistory {
-  turns: Anthropic.Messages.MessageParam[][];
+  turns: ModelMessage[][];
   lastActivity: number;
 }
 
@@ -31,10 +31,9 @@ const histories = new Map<number, ChatHistory>();
 
 /**
  * Serialize message content for DB storage.
- * String content passes through; array content (tool_use, tool_result blocks)
- * is JSON-serialized.
+ * String content passes through; array content (tool blocks) is JSON-serialized.
  */
-function serializeContent(content: Anthropic.Messages.MessageParam["content"]): string {
+function serializeContent(content: ModelMessage["content"]): string {
   if (typeof content === "string") return content;
   return JSON.stringify(content);
 }
@@ -44,7 +43,7 @@ function serializeContent(content: Anthropic.Messages.MessageParam["content"]): 
  * Plain text passes through unchanged. JSON arrays (tool blocks) are parsed back.
  * Backward compatible with existing plain-text rows.
  */
-function deserializeContent(raw: string): string | Anthropic.Messages.ContentBlockParam[] {
+function deserializeContent(raw: string): string | unknown[] {
   if (!raw.startsWith("[")) return raw;
   try {
     const parsed = JSON.parse(raw);
@@ -55,30 +54,50 @@ function deserializeContent(raw: string): string | Anthropic.Messages.ContentBlo
 }
 
 /**
- * Truncate tool_result content blocks that exceed MAX_TOOL_RESULT_LENGTH.
+ * Truncate tool result output values that exceed MAX_TOOL_RESULT_LENGTH.
  * Only affects the copy written to DB — the current turn keeps full results.
  */
 function truncateToolResults(
-  messages: Anthropic.Messages.MessageParam[],
-): Anthropic.Messages.MessageParam[] {
+  messages: ModelMessage[],
+): ModelMessage[] {
   return messages.map((msg) => {
     if (typeof msg.content === "string") return msg;
 
-    const content = (msg.content as Anthropic.Messages.ContentBlockParam[]).map((block) => {
+    const content = (msg.content as unknown[]).map((block: unknown) => {
+      const b = block as Record<string, unknown>;
+      // Handle AI SDK tool-result parts
       if (
-        block.type === "tool_result" &&
-        typeof block.content === "string" &&
-        block.content.length > MAX_TOOL_RESULT_LENGTH
+        b.type === "tool-result" &&
+        b.output != null &&
+        typeof b.output === "object" &&
+        (b.output as Record<string, unknown>).type === "text"
+      ) {
+        const output = b.output as { type: string; value: string };
+        if (output.value.length > MAX_TOOL_RESULT_LENGTH) {
+          return {
+            ...b,
+            output: {
+              ...output,
+              value: output.value.slice(0, MAX_TOOL_RESULT_LENGTH) + "… [truncated]",
+            },
+          };
+        }
+      }
+      // Handle legacy Anthropic tool_result format (backward compat during transition)
+      if (
+        b.type === "tool_result" &&
+        typeof b.content === "string" &&
+        b.content.length > MAX_TOOL_RESULT_LENGTH
       ) {
         return {
-          ...block,
-          content: block.content.slice(0, MAX_TOOL_RESULT_LENGTH) + "… [truncated]",
+          ...b,
+          content: (b.content as string).slice(0, MAX_TOOL_RESULT_LENGTH) + "… [truncated]",
         };
       }
       return block;
     });
 
-    return { ...msg, content };
+    return { ...msg, content } as ModelMessage;
   });
 }
 
@@ -89,12 +108,12 @@ function truncateToolResults(
 /**
  * Trim loaded messages to valid turn boundaries.
  * - From the front: skip until the first user message with string content
- *   (not a tool_result array — those are mid-turn continuations).
+ *   (not a tool role — those are mid-turn continuations).
  * - From the back: skip until the last assistant message with string content.
  */
 function trimToValidBoundaries(
-  messages: Anthropic.Messages.MessageParam[],
-): Anthropic.Messages.MessageParam[] {
+  messages: ModelMessage[],
+): ModelMessage[] {
   // Find first "real" user message (string content = start of a turn)
   let start = 0;
   while (start < messages.length) {
@@ -117,13 +136,13 @@ function trimToValidBoundaries(
 
 /**
  * Group flat messages back into turns. A new turn starts at each user message
- * with string content (as opposed to tool_result arrays which are mid-turn).
+ * with string content (as opposed to tool messages which are mid-turn).
  */
 function reconstructTurns(
-  messages: Anthropic.Messages.MessageParam[],
-): Anthropic.Messages.MessageParam[][] {
-  const turns: Anthropic.Messages.MessageParam[][] = [];
-  let current: Anthropic.Messages.MessageParam[] = [];
+  messages: ModelMessage[],
+): ModelMessage[][] {
+  const turns: ModelMessage[][] = [];
+  let current: ModelMessage[] = [];
 
   for (const msg of messages) {
     // A user message with string content starts a new turn
@@ -152,7 +171,7 @@ function reconstructTurns(
  * Load conversation from DB, respecting TTL.
  * Deserializes JSON content blocks and trims to valid turn boundaries.
  */
-function loadFromDb(chatId: number): Anthropic.Messages.MessageParam[][] {
+function loadFromDb(chatId: number): ModelMessage[][] {
   try {
     const conv = db
       .select()
@@ -178,10 +197,10 @@ function loadFromDb(chatId: number): Anthropic.Messages.MessageParam[][] {
       .all()
       .reverse();
 
-    const messages: Anthropic.Messages.MessageParam[] = rows.map((row) => ({
-      role: row.role as "user" | "assistant",
+    const messages: ModelMessage[] = rows.map((row) => ({
+      role: row.role as ModelMessage["role"],
       content: deserializeContent(row.content),
-    }));
+    })) as ModelMessage[];
 
     // Trim orphaned fragments at window boundaries, then group into turns
     const trimmed = trimToValidBoundaries(messages);
@@ -213,7 +232,7 @@ const trimStmt = sqlite.prepare(`
  */
 function writeToDb(
   chatId: number,
-  turnMessages: Anthropic.Messages.MessageParam[],
+  turnMessages: ModelMessage[],
   userId?: number,
 ): void {
   try {
@@ -237,7 +256,7 @@ function writeToDb(
 
     // Insert all messages from the turn
     // Tag user-role messages with string content (real user messages) with the userId.
-    // tool_result arrays (mid-turn continuations) are not tagged.
+    // tool messages (mid-turn continuations) are not tagged.
     const values = toStore.map((msg) => ({
       telegramChatId: chatId,
       telegramUserId: userId && msg.role === "user" && typeof msg.content === "string" ? userId : null,
@@ -262,7 +281,7 @@ function writeToDb(
 // ---------------------------------------------------------------------------
 
 /** Get conversation history for a chat. Cache-first, falls back to DB on miss. */
-export function getHistory(chatId: number): Anthropic.Messages.MessageParam[] {
+export function getHistory(chatId: number): ModelMessage[] {
   const entry = histories.get(chatId);
   if (entry) {
     // Check TTL
@@ -284,13 +303,13 @@ export function getHistory(chatId: number): Anthropic.Messages.MessageParam[] {
 /**
  * Append a complete turn to conversation history.
  * A turn is the full message sequence for one user interaction:
- * [user, assistant/tool_use, user/tool_result, ..., assistant/text]
+ * [user, assistant/tool-call, tool/tool-result, ..., assistant/text]
  *
  * @param userId — Telegram user ID, stored on user-role messages for group→PM context sharing.
  */
 export function appendToHistory(
   chatId: number,
-  turnMessages: Anthropic.Messages.MessageParam[],
+  turnMessages: ModelMessage[],
   userId?: number,
 ): void {
   let entry = histories.get(chatId);
