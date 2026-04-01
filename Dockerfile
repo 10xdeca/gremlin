@@ -39,9 +39,6 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/gremlin.db
 
-# Install Claude Code CLI (used by ai-sdk-provider-claude-code for Max subscription auth)
-RUN npm install -g @anthropic-ai/claude-code
-
 # Install curl for health checks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
