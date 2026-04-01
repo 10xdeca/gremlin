@@ -1,4 +1,6 @@
-import { getAnthropicClient } from "./anthropic-client.js";
+import { generateObject } from "ai";
+import { z } from "zod";
+import { getModel } from "./anthropic-client.js";
 
 interface TaskInfo {
   title: string;
@@ -19,6 +21,11 @@ function getCacheKey(task: TaskInfo): string {
   return `${task.title}::${task.description || ""}`;
 }
 
+const VaguenessSchema = z.object({
+  isVague: z.boolean().describe("Whether the task is too vague to start working on"),
+  reason: z.string().nullable().describe("Brief reason if vague, null if clear"),
+});
+
 export async function evaluateTaskVagueness(task: TaskInfo): Promise<VaguenessResult> {
   const cacheKey = getCacheKey(task);
   const cached = cache.get(cacheKey);
@@ -28,20 +35,15 @@ export async function evaluateTaskVagueness(task: TaskInfo): Promise<VaguenessRe
   }
 
   try {
-    const anthropic = await getAnthropicClient();
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 150,
-      messages: [
-        {
-          role: "user",
-          content: `Evaluate if this task is clear enough for someone to start working on it.
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: VaguenessSchema,
+      maxOutputTokens: 150,
+      prompt: `Evaluate if this task is clear enough for someone to start working on it.
 
 Task title: "${task.title}"
 Description: ${task.description ? `"${task.description}"` : "(none)"}
 List: ${task.listName}
-
-Respond with JSON only: {"isVague": true/false, "reason": "brief reason if vague, null if clear"}
 
 A task is vague if:
 - It's unclear what the deliverable is
@@ -52,20 +54,9 @@ A task is NOT vague if:
 - The title is self-explanatory (e.g., "Fix typo in README")
 - It's a well-known type of task (e.g., "Weekly standup notes")
 - The context from the list name makes it clear`,
-        },
-      ],
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
-
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("Failed to parse vagueness response:", text);
-      return { isVague: false, reason: null };
-    }
-
-    const result = JSON.parse(jsonMatch[0]) as VaguenessResult;
+    const result: VaguenessResult = object;
 
     // Cache the result
     cache.set(cacheKey, { result, timestamp: Date.now() });

@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockCreate } = vi.hoisted(() => ({
-  mockCreate: vi.fn(),
+const { mockGenerateObject } = vi.hoisted(() => ({
+  mockGenerateObject: vi.fn(),
 }));
 
-// Mock the anthropic client
+// Mock the AI SDK
+vi.mock("ai", () => ({
+  generateObject: (...args: unknown[]) => mockGenerateObject(...args),
+  // Re-export zod schema helpers (not used directly in scanner, but needed for module resolution)
+  jsonSchema: vi.fn(),
+  tool: vi.fn(),
+}));
+
+// Mock the model provider
 vi.mock("../services/anthropic-client.js", () => ({
-  getAnthropicClient: async () => ({
-    messages: { create: mockCreate },
-  }),
-  invalidateCachedClient: () => {},
-  getTokenHealth: () => ({ status: "healthy", lastRefresh: Date.now(), expiresAt: Date.now() + 3600000 }),
+  getModel: vi.fn(() => "mock-model"),
 }));
 
 // Mock MCP manager (still needed for module resolution)
@@ -55,13 +59,13 @@ describe("contact-scanner", () => {
 
   describe("classification", () => {
     it("returns early for non-contact images", async () => {
-      mockCreate.mockResolvedValueOnce({
-        content: [{ type: "text", text: '{"hasContacts": false}' }],
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { hasContacts: false },
       });
 
       await scanImageForContacts(FAKE_BASE64, "image/jpeg", SCAN_CTX, mockSend);
 
-      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
       expect(mockSend).not.toHaveBeenCalled();
     });
 
@@ -70,17 +74,13 @@ describe("contact-scanner", () => {
         { name: "Jane Doe", email: "jane@example.com", organization: "Acme Corp" },
       ];
 
-      mockCreate.mockResolvedValueOnce({
-        content: [
-          { type: "text", text: JSON.stringify({ hasContacts: true, contacts }) },
-        ],
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { hasContacts: true, contacts },
       });
 
       await scanImageForContacts(FAKE_BASE64, "image/jpeg", SCAN_CTX, mockSend);
 
-      // Only 1 API call (classification only — no tool-calling step)
-      expect(mockCreate).toHaveBeenCalledTimes(1);
-      // Confirmation sent
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
       expect(mockSend).toHaveBeenCalledTimes(1);
       expect(mockSend).toHaveBeenCalledWith(
         SCAN_CTX,
@@ -88,22 +88,18 @@ describe("contact-scanner", () => {
       );
     });
 
-    it("handles malformed classification JSON gracefully", async () => {
-      mockCreate.mockResolvedValueOnce({
-        content: [{ type: "text", text: "not valid json" }],
-      });
+    it("handles classification failure gracefully", async () => {
+      mockGenerateObject.mockRejectedValueOnce(new Error("Schema validation failed"));
 
       await scanImageForContacts(FAKE_BASE64, "image/png", SCAN_CTX, mockSend);
 
-      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
       expect(mockSend).not.toHaveBeenCalled();
     });
 
     it("returns early when contacts array is empty", async () => {
-      mockCreate.mockResolvedValueOnce({
-        content: [
-          { type: "text", text: '{"hasContacts": true, "contacts": []}' },
-        ],
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { hasContacts: true, contacts: [] },
       });
 
       await scanImageForContacts(FAKE_BASE64, "image/jpeg", SCAN_CTX, mockSend);
@@ -159,12 +155,12 @@ describe("contact-scanner", () => {
       const secondScan = new Promise<void>((r) => { resolveSecond = r; });
 
       let callCount = 0;
-      mockCreate.mockImplementation(async () => {
+      mockGenerateObject.mockImplementation(async () => {
         callCount++;
         if (callCount <= 2) {
           await (callCount === 1 ? firstScan : secondScan);
         }
-        return { content: [{ type: "text", text: '{"hasContacts": false}' }] };
+        return { object: { hasContacts: false } };
       });
 
       // Start 2 scans (fills capacity)
@@ -184,13 +180,13 @@ describe("contact-scanner", () => {
       await scan2;
 
       // Only 2 classification calls (third was dropped)
-      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("error handling", () => {
     it("catches and logs errors without throwing", async () => {
-      mockCreate.mockRejectedValueOnce(new Error("API down"));
+      mockGenerateObject.mockRejectedValueOnce(new Error("API down"));
 
       await expect(
         scanImageForContacts(FAKE_BASE64, "image/jpeg", SCAN_CTX, mockSend),
@@ -202,10 +198,8 @@ describe("contact-scanner", () => {
     it("catches sendConfirmation errors without throwing", async () => {
       const contacts = [{ name: "Test User", email: "test@test.com" }];
 
-      mockCreate.mockResolvedValueOnce({
-        content: [
-          { type: "text", text: JSON.stringify({ hasContacts: true, contacts }) },
-        ],
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { hasContacts: true, contacts },
       });
 
       const failingSend: SendConfirmation = async () => {

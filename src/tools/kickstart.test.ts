@@ -24,6 +24,17 @@ vi.mock("../db/client.js", async () => {
   return { db, schema, sqlite };
 });
 
+// Mock AI SDK
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return { ...actual };
+});
+
+// Mock anthropic client
+vi.mock("../services/anthropic-client.js", () => ({
+  getModel: vi.fn(() => "mock-model"),
+}));
+
 // Mock MCP manager
 vi.mock("../agent/mcp-manager.js", () => ({
   mcpManager: {
@@ -142,11 +153,12 @@ describe("kickstart queries", () => {
 describe("kickstart tool registration", () => {
   it("registers all kickstart tools", async () => {
     const { registerKickstartTools } = await import("./kickstart.js");
-    const { getAnthropicTools } = await import("../agent/tool-registry.js");
+    const { getTools } = await import("../agent/tool-registry.js");
 
     registerKickstartTools();
-    const tools = getAnthropicTools();
-    const toolNames = tools.map((t) => t.name);
+    const fakeApi = { sendChatAction: async () => true } as any;
+    const tools = getTools(12345, fakeApi);
+    const toolNames = Object.keys(tools);
 
     expect(toolNames).toContain("get_kickstart_state");
     expect(toolNames).toContain("start_kickstart");

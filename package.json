@@ -16,14 +16,16 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.13",
-    "@anthropic-ai/sdk": "^0.79.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@playwright/mcp": "^0.0.68",
+    "ai": "^6.0.141",
+    "ai-sdk-provider-claude-code": "^3.4.4",
     "better-sqlite3": "^11.3.0",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.42.0",
     "grammy": "^1.21.1",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
