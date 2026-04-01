@@ -42,13 +42,7 @@ export function getTools(chatId: number, api: Api): ToolSet {
       execute: async (args: Record<string, unknown>) => {
         sendTyping(api, chatId);
         console.log(`Tool call: ${name}(${JSON.stringify(args)})`);
-        try {
-          return await mcpManager.callTool(name, args);
-        } catch (err) {
-          const msg = `Error: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`Tool ${name} failed:`, err);
-          return msg;
-        }
+        return mcpManager.callTool(name, args);
       },
     });
   }
@@ -63,13 +57,7 @@ export function getTools(chatId: number, api: Api): ToolSet {
       execute: async (args: Record<string, unknown>) => {
         sendTyping(api, chatId);
         console.log(`Tool call: ${name}(${JSON.stringify(args)})`);
-        try {
-          return await handler(args);
-        } catch (err) {
-          const msg = `Error: ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`Tool ${name} failed:`, err);
-          return msg;
-        }
+        return handler(args);
       },
     });
   }
