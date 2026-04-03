@@ -38,7 +38,7 @@ jobs:
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           KAN_API_KEY=${{ secrets.KAN_API_KEY }}
           KAN_BASE_URL=${{ secrets.KAN_BASE_URL }}
-          CLAUDE_REFRESH_TOKEN=${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN=${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OUTLINE_API_KEY=${{ secrets.OUTLINE_API_KEY }}
           OUTLINE_BASE_URL=${{ secrets.OUTLINE_BASE_URL }}
           RADICALE_PASSWORD=${{ secrets.RADICALE_PASSWORD }}

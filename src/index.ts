@@ -164,15 +164,15 @@ bot.on("message:text", async (ctx) => {
   )) return;
 
   // In groups with configured topics:
-  // - In PM or Social topics: process normally (all messages subject to cooldown)
-  // - In other topics: only process @mentions and replies to the bot
+  // - In PM topic: process normally (all messages subject to cooldown)
+  // - In Social or other topics: only process @mentions and replies to the bot
   let topicType: TopicType;
   if (ctx.chat.type !== "private") {
     const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
     topicType = resolveTopicType(ctx.message?.message_thread_id, pmThreadId, socialThreadId);
     const hasConfiguredTopics = pmThreadId || socialThreadId;
-    if (hasConfiguredTopics && !topicType) {
-      // Message is in an unrecognised topic — only respond to @mentions/replies
+    if (hasConfiguredTopics && topicType !== "pm") {
+      // Message is in social or unrecognised topic — only respond to @mentions/replies
       const isMentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
       const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
       if (!isMentioned && !isReplyToBot) return;
@@ -247,7 +247,10 @@ bot.on("message:text", async (ctx) => {
     }
   } catch (error) {
     console.error("Agent loop error:", error);
-    await ctx.reply("Something went wrong processing your message. Please try again.");
+    const errorReplyOpts = ctx.message?.message_thread_id
+      ? { message_thread_id: ctx.message.message_thread_id }
+      : {};
+    await ctx.reply("Something went wrong processing your message. Please try again.", errorReplyOpts);
   }
 });
 
@@ -371,11 +374,11 @@ async function handleImageMessage(
     const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
     const isReplyToBot = ctx.me?.id && replyMsg?.from?.id === ctx.me.id;
 
-    // Topic filtering
+    // Topic filtering — only PM topic gets proactive responses
     const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
     topicType = resolveTopicType(messageThreadId, pmThreadId, socialThreadId);
     const hasConfiguredTopics = pmThreadId || socialThreadId;
-    if (hasConfiguredTopics && !topicType) {
+    if (hasConfiguredTopics && topicType !== "pm") {
       if (!isMentioned && !isReplyToBot) return;
     }
 
