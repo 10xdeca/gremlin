@@ -522,7 +522,10 @@ bot.on("message:photo", async (ctx) => {
     );
   } catch (error) {
     console.error("Photo processing error:", error);
-    await ctx.reply("Something went wrong processing your image. Please try again.");
+    const errorReplyOpts = ctx.message?.message_thread_id
+      ? { message_thread_id: ctx.message.message_thread_id }
+      : {};
+    await ctx.reply("Something went wrong processing your image. Please try again.", errorReplyOpts);
   }
 });
 
@@ -542,7 +545,10 @@ bot.on("message:document", async (ctx) => {
     );
   } catch (error) {
     console.error("Document image processing error:", error);
-    await ctx.reply("Something went wrong processing your image. Please try again.");
+    const errorReplyOpts = ctx.message?.message_thread_id
+      ? { message_thread_id: ctx.message.message_thread_id }
+      : {};
+    await ctx.reply("Something went wrong processing your image. Please try again.", errorReplyOpts);
   }
 });
 
