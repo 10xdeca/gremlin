@@ -24,7 +24,7 @@ interface AgentInput {
   username?: string;
   isAdmin: boolean;
   messageThreadId?: number;
-  topicType?: "pm" | "social";
+  topicType?: "pm" | "gremlin-corner";
   replyToText?: string;
   replyToUsername?: string;
   /** When true, the agent composes a message without tool access (used for scheduled reminders). */
