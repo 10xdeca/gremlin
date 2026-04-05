@@ -85,7 +85,7 @@ import { topicCache } from "./utils/topic-cache.js";
 const TOPIC_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /** Topic types for behavioral routing. */
-export type TopicType = "pm" | "social" | undefined;
+export type TopicType = "pm" | "gremlin-corner" | undefined;
 
 async function getTopicConfig(chatId: number): Promise<{ pmThreadId: number | null; socialThreadId: number | null }> {
   const cached = topicCache.get(chatId);
@@ -102,10 +102,10 @@ async function getTopicConfig(chatId: number): Promise<{ pmThreadId: number | nu
 }
 
 /** Determine which topic type a message is in. */
-function resolveTopicType(messageThreadId: number | undefined, pmThreadId: number | null, socialThreadId: number | null): TopicType {
+function resolveTopicType(messageThreadId: number | undefined, pmThreadId: number | null, gremlinCornerThreadId: number | null): TopicType {
   if (!messageThreadId) return undefined;
   if (pmThreadId && messageThreadId === pmThreadId) return "pm";
-  if (socialThreadId && messageThreadId === socialThreadId) return "social";
+  if (gremlinCornerThreadId && messageThreadId === gremlinCornerThreadId) return "gremlin-corner";
   return undefined;
 }
 
@@ -164,18 +164,17 @@ bot.on("message:text", async (ctx) => {
   )) return;
 
   // In groups with configured topics:
-  // - In PM topic: process normally (all messages subject to cooldown)
-  // - In Social or other topics: only process @mentions and replies to the bot
+  // - PM topic & Gremlin's Corner: process all messages (subject to cooldown)
+  // - All other topics: only process @mentions by name
   let topicType: TopicType;
   if (ctx.chat.type !== "private") {
     const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
     topicType = resolveTopicType(ctx.message?.message_thread_id, pmThreadId, socialThreadId);
     const hasConfiguredTopics = pmThreadId || socialThreadId;
-    if (hasConfiguredTopics && topicType !== "pm") {
-      // Message is in social or unrecognised topic — only respond to @mentions/replies
+    if (hasConfiguredTopics && topicType !== "pm" && topicType !== "gremlin-corner") {
+      // Not in PM or Gremlin's Corner — only respond to @mentions by name
       const isMentioned = botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
-      const isReplyToBot = ctx.me?.id && ctx.message?.reply_to_message?.from?.id === ctx.me.id;
-      if (!isMentioned && !isReplyToBot) return;
+      if (!isMentioned) return;
     }
   }
 
@@ -374,12 +373,12 @@ async function handleImageMessage(
     const isMentioned = botUsername && caption.toLowerCase().includes(`@${botUsername.toLowerCase()}`);
     const isReplyToBot = ctx.me?.id && replyMsg?.from?.id === ctx.me.id;
 
-    // Topic filtering — only PM topic gets proactive responses
+    // Topic filtering — only PM topic and Gremlin's Corner get proactive responses
     const { pmThreadId, socialThreadId } = await getTopicConfig(chatId);
     topicType = resolveTopicType(messageThreadId, pmThreadId, socialThreadId);
     const hasConfiguredTopics = pmThreadId || socialThreadId;
-    if (hasConfiguredTopics && topicType !== "pm") {
-      if (!isMentioned && !isReplyToBot) return;
+    if (hasConfiguredTopics && topicType !== "pm" && topicType !== "gremlin-corner") {
+      if (!isMentioned) return;
     }
 
     // Cooldown for non-targeted messages
@@ -697,7 +696,7 @@ async function announceRebirth(): Promise<void> {
         userId: 0, // system-initiated
         isAdmin: false,
         messageThreadId: link.socialThreadId!,
-        topicType: "social",
+        topicType: "gremlin-corner",
       });
 
       if (response) {

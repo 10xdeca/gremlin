@@ -13,7 +13,7 @@ interface MessageContext {
   /** Thread ID if message is in a topic */
   messageThreadId?: number;
   /** Which topic type this message is in: "pm", "social", or undefined */
-  topicType?: "pm" | "social";
+  topicType?: "pm" | "gremlin-corner";
   /** Text of the message being replied to, if any */
   replyToText?: string;
   /** Username of the person whose message is being replied to */
@@ -40,7 +40,7 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   );
 
   // Context
-  if (ctx.userId === 0 && ctx.topicType === "social") {
+  if (ctx.userId === 0 && ctx.topicType === "gremlin-corner") {
     // System-initiated in social topic (rebirth announcement)
     parts.push(`## System-Initiated — Rebirth Announcement`);
     parts.push(`You have just been redeployed. Announce your arrival in character.`);
@@ -108,7 +108,7 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
   }
 
   // Topic context
-  if (ctx.topicType === "social") {
+  if (ctx.topicType === "gremlin-corner") {
     parts.push("## Topic: Gremlin's Corner");
     parts.push("You're in Gremlin's Corner — the social/casual topic. This is YOUR space.");
     parts.push("- Chat freely about anything: banter, jokes, off-topic discussions, memes, whatever.");
