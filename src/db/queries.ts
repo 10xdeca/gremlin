@@ -146,38 +146,6 @@ export async function getUserLinkByMemberPublicId(memberPublicId: string) {
   return results[0] || null;
 }
 
-// Default Board Config
-export async function getDefaultBoardConfig(telegramChatId: number) {
-  const results = db
-    .select()
-    .from(schema.defaultBoardConfig)
-    .where(eq(schema.defaultBoardConfig.telegramChatId, telegramChatId))
-    .all();
-  return results[0] || null;
-}
-
-export async function upsertDefaultBoardConfig(data: {
-  telegramChatId: number;
-  boardPublicId: string;
-  listPublicId: string;
-  boardName: string;
-  listName: string;
-}) {
-  return db
-    .insert(schema.defaultBoardConfig)
-    .values({ ...data, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: schema.defaultBoardConfig.telegramChatId,
-      set: {
-        boardPublicId: data.boardPublicId,
-        listPublicId: data.listPublicId,
-        boardName: data.boardName,
-        listName: data.listName,
-        updatedAt: new Date(),
-      },
-    })
-    .run();
-}
 
 // Reminders
 export async function getLastReminder(
