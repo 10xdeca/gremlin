@@ -48,6 +48,16 @@ function isApiAuthError(err: unknown): boolean {
 }
 
 /**
+ * Check whether an error is a context overflow (prompt too long).
+ * Happens when tool results accumulate beyond the model's token limit.
+ */
+function isContextOverflowError(err: unknown): boolean {
+  if (err == null || typeof err !== "object") return false;
+  const body = (err as { responseBody?: string }).responseBody ?? "";
+  return body.includes("prompt is too long");
+}
+
+/**
  * Run the agent loop: send message to Claude via Vercel AI SDK, return final text.
  * The SDK handles the tool call loop automatically via maxSteps.
  */
@@ -112,6 +122,10 @@ export async function runAgentLoop(
         "API key rejected by Anthropic during a conversation."
       );
       return "I'm having trouble with my brain connection right now. The team has been notified.";
+    }
+    if (isContextOverflowError(err)) {
+      console.error("Context overflow during generateText:", (err as { responseBody?: string }).responseBody);
+      return "That request generated too much data for me to process in one go. Try breaking it into smaller questions — e.g. ask about one board at a time.";
     }
     // Non-auth API error — let it propagate to the outer catch in index.ts
     throw err;
