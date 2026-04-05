@@ -1,6 +1,6 @@
 {
   "name": "gremlin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Telegram bot for Kan task management - chase people about overdue tasks",
   "type": "module",
   "main": "dist/index.js",
