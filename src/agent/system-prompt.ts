@@ -159,8 +159,8 @@ export async function buildSystemPrompt(ctx: MessageContext): Promise<string> {
       1: `**Step 1: Workspace Setup**
 List available Kan workspaces using \`kan_list_workspaces\`. Ask the user which workspace this chat should be linked to. Once they choose, call \`link_workspace\` to link it. Then call \`advance_kickstart\` with a note about which workspace was linked.`,
       2: `**Step 2: Board & Topics**
-Set up the default board for card creation. List the workspace's boards with \`kan_list_boards\`, help the user pick one and a default list, then call \`set_default_board\`.
-Then ask about Telegram topics — which topic for task reminders (\`set_reminder_topic\`) and which for social chat (\`set_social_topic\`). The user needs to tell you the topic/thread IDs (right-click a topic → Copy Link, the last number in the URL is the thread ID).
+Set up the default board for card creation. List the workspace's boards with \`kan_list_boards\` and present the board NAMES to the user — do NOT call \`kan_get_board\` yet. Wait for the user to pick a board, THEN call \`kan_get_board\` on that one board to show its lists. Once they pick a list, call \`set_default_board\`.
+Then ask about Telegram topics — which topic for task reminders (\`set_reminder_topic\`) and which for Gremlin's Corner (\`set_social_topic\`). The user needs to tell you the topic/thread IDs (right-click a topic → Copy Link, the last number in the URL is the thread ID).
 Call \`advance_kickstart\` when done.`,
       3: `**Step 3: Team Roster**
 Map Telegram users to Kan workspace members. Use \`kan_get_workspace\` to see workspace members, then ask the user which Telegram username maps to which Kan member. Use \`set_user_mapping\` for each pair.
