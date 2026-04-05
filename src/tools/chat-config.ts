@@ -5,8 +5,6 @@ import {
   deleteWorkspaceLink,
   updateWorkspaceLinkTopic,
   updateWorkspaceLinkSocialTopic,
-  getDefaultBoardConfig,
-  upsertDefaultBoardConfig,
 } from "../db/queries.js";
 import { invalidateTopicCache } from "../utils/topic-cache.js";
 
@@ -23,7 +21,7 @@ export function registerChatConfigTools(): void {
   registerCustomTool({
     name: "get_chat_config",
     description:
-      "Get the current chat's workspace link and default board/list configuration. Returns workspace info, topic thread ID, and default board/list for card creation.",
+      "Get the current chat's workspace link configuration. Returns workspace info and topic thread IDs.",
     inputSchema: {
       type: "object",
       properties: {
@@ -34,7 +32,6 @@ export function registerChatConfigTools(): void {
     handler: async (args) => {
       const chatId = args.chat_id as number;
       const link = await getWorkspaceLink(chatId);
-      const defaultBoard = await getDefaultBoardConfig(chatId);
 
       return JSON.stringify({
         workspace: link
@@ -43,14 +40,6 @@ export function registerChatConfigTools(): void {
               workspaceName: link.workspaceName,
               messageThreadId: link.messageThreadId,
               socialThreadId: link.socialThreadId,
-            }
-          : null,
-        defaultBoard: defaultBoard
-          ? {
-              boardPublicId: defaultBoard.boardPublicId,
-              listPublicId: defaultBoard.listPublicId,
-              boardName: defaultBoard.boardName,
-              listName: defaultBoard.listName,
             }
           : null,
       });
@@ -158,33 +147,4 @@ export function registerChatConfigTools(): void {
     },
   });
 
-  registerCustomTool({
-    name: "set_default_board",
-    description:
-      "Set the default board and list for new card creation in this chat. Admin only.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        chat_id: { type: "number", description: "Telegram chat ID" },
-        board_public_id: { type: "string", description: "Board public ID" },
-        list_public_id: { type: "string", description: "List public ID" },
-        board_name: { type: "string", description: "Board name (for display)" },
-        list_name: { type: "string", description: "List name (for display)" },
-      },
-      required: ["chat_id", "board_public_id", "list_public_id", "board_name", "list_name"],
-    },
-    handler: async (args) => {
-      await upsertDefaultBoardConfig({
-        telegramChatId: args.chat_id as number,
-        boardPublicId: args.board_public_id as string,
-        listPublicId: args.list_public_id as string,
-        boardName: args.board_name as string,
-        listName: args.list_name as string,
-      });
-      return JSON.stringify({
-        success: true,
-        message: `Default set to "${args.board_name}" → "${args.list_name}"`,
-      });
-    },
-  });
 }

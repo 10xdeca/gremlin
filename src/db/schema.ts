@@ -48,16 +48,6 @@ export const botIdentity = sqliteTable("bot_identity", {
   chosenInChatId: integer("chosen_in_chat_id"),
 });
 
-// Default board/list config for card creation per chat
-export const defaultBoardConfig = sqliteTable("default_board_config", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  telegramChatId: integer("telegram_chat_id").notNull().unique(),
-  boardPublicId: text("board_public_id").notNull(),
-  listPublicId: text("list_public_id").notNull(),
-  boardName: text("board_name").notNull(),
-  listName: text("list_name").notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
-});
 
 // Persists OAuth tokens (e.g. Claude refresh tokens) across restarts
 export const oauthTokens = sqliteTable("oauth_tokens", {
